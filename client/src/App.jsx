@@ -5,9 +5,9 @@ function App() {
   return (
     <>
       <h1 className="text-3xl font-bold underline">Hello world!</h1>
-       <Routes>
-      <Route path="/" element={<Rootlayout />} />
-    </Routes>
+      <Routes>
+        <Route path="/" element={<Rootlayout />}></Route>
+      </Routes>
     </>
   );
 }
