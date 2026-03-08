@@ -2,15 +2,10 @@ import React from "react";
 
 const Footer = () => {
   return (
-    <footer className="bg-white rounded-lg shadow border border-gray-200 m-4">
+    <footer className="bg-white  shadow border border-gray-200 ">
       <div className="w-full max-w-7xl mx-auto p-4 md:py-8">
-
         <div className="sm:flex sm:items-center sm:justify-between">
-
-          <a
-            href="/"
-            className="flex items-center mb-4 sm:mb-0 space-x-3"
-          >
+          <a href="/" className="flex items-center mb-4 sm:mb-0 space-x-3">
             <img
               src="https://flowbite.com/docs/images/logo.svg"
               className="h-7"
@@ -46,7 +41,6 @@ const Footer = () => {
               </a>
             </li>
           </ul>
-
         </div>
 
         <hr className="my-6 border-gray-200 sm:mx-auto lg:my-8" />
@@ -58,7 +52,6 @@ const Footer = () => {
           </a>
           . All Rights Reserved.
         </span>
-
       </div>
     </footer>
   );

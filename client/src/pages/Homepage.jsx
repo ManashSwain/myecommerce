@@ -1,7 +1,7 @@
-import React from 'react'
 import Promosection from '../components/Promosection'
 import Collections from '../components/Collections'
 import Productlist from '../components/Productlist'
+import Newsletter from '../components/Newsletter'
 
 const Homepage = () => {
   return (
@@ -9,6 +9,7 @@ const Homepage = () => {
    <Promosection/>
    <Collections/>
    <Productlist/>
+   <Newsletter/>
    </>
   )
 }
