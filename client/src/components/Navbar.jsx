@@ -23,7 +23,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 const Navbar = () => {
-  // cart view state 
+  // cart view state
   const [cartstate, setcartstate] = useState(true);
   const products = [
     {
@@ -196,15 +196,13 @@ const Navbar = () => {
   const [open, setOpen] = useState(false);
   return (
     <>
-    {/* cart code start */}
-     <div>
-        <button
-          onClick={() => setcartstate(true)}
-          className="rounded-md bg-gray-950/5 px-2.5 py-1.5 text-sm font-semibold text-gray-900 hover:bg-gray-950/10"
+      {/* cart code start */}
+      <div>
+        <Dialog
+          open={cartstate}
+          onClose={setcartstate}
+          className="relative z-10"
         >
-          Open drawer
-        </button>
-        <Dialog open={cartstate} onClose={setcartstate} className="relative z-10">
           <DialogBackdrop
             transition
             className="fixed inset-0 bg-gray-500/75 transition-opacity duration-500 ease-in-out data-closed:opacity-0"
@@ -486,10 +484,7 @@ const Navbar = () => {
             Get free delivery on orders over $100
           </p>
 
-          <nav
-            aria-label="Top"
-            className="mx-auto w-full px-4 sm:px-6 lg:px-8"
-          >
+          <nav aria-label="Top" className="mx-auto w-full px-4 sm:px-6 lg:px-8">
             <div className="border-b border-gray-200">
               <div className="flex h-16 items-center">
                 <button
