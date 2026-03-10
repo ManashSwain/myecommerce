@@ -24,7 +24,7 @@ import {
 
 const Navbar = () => {
   // cart view state
-  const [cartstate, setcartstate] = useState(true);
+  const [cartstate, setcartstate] = useState(false);
   const products = [
     {
       id: 1,
