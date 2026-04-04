@@ -42,3 +42,21 @@ export const getAllCategory = async (req,res) => {
 
 // Update category (Update)
 
+export const updateCategory = async (req,res)=>{
+  try {
+   const categoryId = req.params.categoryId ;
+   const updateCategory = await Category.findOneAndUpdate({categoryId} , req.body, {new: true , runValidators:true})
+   res.status(200).json({
+    sucess : true,
+    message : "Updated successfully",
+    data : updateCategory
+   })
+  }
+  catch(error){
+    res.status(500).json({
+      success : false,
+      message : error.message
+    })
+  }
+}
+
