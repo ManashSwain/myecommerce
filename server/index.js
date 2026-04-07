@@ -1,31 +1,34 @@
 import express from "express";
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 dotenv.config();
 import { connectDb } from "./src/utils/connectDB.js";
 
-// Route imports 
-import router from "./src/Routes/category.route.js";
+
+// Route imports
+import categoryrouter from "./src/Routes/category.route.js";
+import userrouter from "./src/Routes/user.route.js";
 
 // DNS SETUP
-import dns from 'dns'
+import dns from "dns";
 
-dns.setServers(["1.1.1.1","8.8.8.8"])
+dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
 const app = express();
 const PORT = 3000;
 
-// Middlewares 
-// Express middlewares 
+// Middlewares
+// Route Middlewares
+app.use("/api", userrouter);
+// Express middlewares
 app.use(express.json());
-// Route Middlewares 
-app.use("/api/categories", router)
-
+// Route Middlewares
+app.use("/api/categories", categoryrouter);
 
 app.get("/", (req, res) => {
-  res.json({message : "Hello world!"});
+  res.json({ message: "Hello world!" });
 });
 
-// Database CALL 
+// Database CALL
 connectDb();
 
 app.listen(PORT, () => {
