@@ -23,7 +23,7 @@ export const createcategory = async (req, res) => {
 };
 
 // Fetch all category  (Read)
-export const getAllCategory = async (req,res) => {
+export const getAllCategory = async (req, res) => {
   try {
     const allCategories = await Category.find({});
     res.status(200).json({
@@ -39,24 +39,55 @@ export const getAllCategory = async (req,res) => {
   }
 };
 
-
 // Update category (Update)
 
-export const updateCategory = async (req,res)=>{
+export const updateCategory = async (req, res) => {
   try {
-   const categoryId = req.params.categoryId ;
-   const updateCategory = await Category.findOneAndUpdate({categoryId} , req.body, {new: true , runValidators:true})
-   res.status(200).json({
-    sucess : true,
-    message : "Updated successfully",
-    data : updateCategory
-   })
+    const categoryId = req.params.categoryId;
+    const updatecategory = await Category.findOneAndUpdate(
+      { _id: categoryId },
+      req.body,
+      { new: true, runValidators: true },
+    );
+    if (!updateCategory) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+    res.status(200).json({
+      sucess: true,
+      message: "Updated successfully",
+      data: updatecategory,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
-  catch(error){
-    res.status(500).json({
-      success : false,
-      message : error.message
-    })
-  }
-}
+};
 
+// Delete category (delete)
+
+export const deleteCategory = async (req, res) => {
+  try {
+    const categoryId = req.params.categoryId;
+    const deletedCategory = await Category.findOneAndDelete({
+      _id: categoryId,
+    });
+    if (!deleteCategory) {
+      return res.status(400).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+    return res.status(200).json({
+      success : true ,
+      message : "Deleted successfully",
+      deletedCategory : deletedCategory
+    })
+  } catch (error) {
+    console.error(error);
+  }
+};
