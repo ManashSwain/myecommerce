@@ -1,4 +1,4 @@
-import Subcategory from "../Modals/subcategory.modal.js"
+import {Subcategory} from "../Modals/subcategory.modal.js"
 
 // Create subcategory (CREATE)
 export const createSubCategory = async(req,res)=>{
@@ -16,7 +16,10 @@ export const createSubCategory = async(req,res)=>{
       })
    }
    catch(err){
-    console.error(err)
+    return res.status(500).json({
+      success : false,
+      message : "error creating a subcategory"
+    })
    }
 }
 
@@ -44,6 +47,21 @@ export const updatesubcategory = async (req,res)=>{
       success : true,
       message : "Updated subcategory successfully",
       data : updatedcategory
+     })
+  }catch(err){
+   console.error(err)
+  }
+}
+
+// Delete a subcategory (DELETE)
+export const deleteSubCategory = async(req,res)=>{
+  try {
+     const subcategoryId = req.params.subcategoryid ;
+     const deletedsubcategory = await Subcategory.findOneAndDelete({_id:subcategoryId});
+     return res.status(200).json({
+       success : true ,
+       message : "Deleted subcategory successfully",
+       data : deletedsubcategory
      })
   }catch(err){
    console.error(err)
