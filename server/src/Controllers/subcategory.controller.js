@@ -34,3 +34,18 @@ export const getAllsubcategories = async(req,res)=>{
       console.error(err)
    }
 }
+
+// Update a subcategory (PATCH)
+export const updatesubcategory = async (req,res)=>{
+  try{
+     const subcategoryId= req.params.subcategoryid;
+     const updatedcategory = await Subcategory.findOneAndUpdate({_id:subcategoryId},req.body,{new:true,runValidators:true});
+     return res.status(200).json({
+      success : true,
+      message : "Updated subcategory successfully",
+      data : updatedcategory
+     })
+  }catch(err){
+   console.error(err)
+  }
+}
