@@ -8,6 +8,7 @@ import { connectDb } from "./src/utils/connectDB.js";
 import categoryrouter from "./src/Routes/category.route.js";
 import userrouter from "./src/Routes/user.route.js";
 import subcategoryrouter from "./src/Routes/subcategory.route.js"
+import productrouter from "./src/Routes/product.route.js"
 
 // DNS SETUP
 import dns from "dns";
@@ -27,6 +28,8 @@ app.use(express.json());
 app.use("/api/categories", categoryrouter);
 // subcategories middleware 
 app.use("/api/subcategories",subcategoryrouter)
+// product middleware
+app.use("/api/products", productrouter)
 
 app.get("/", (req, res) => {
   res.json({ message: "Hello world!" });
