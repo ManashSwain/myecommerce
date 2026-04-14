@@ -9,6 +9,7 @@ export const createProduct = async (req, res) => {
       price,
       category,
       subcategory,
+      images,
       slug,
       rating,
       color,
@@ -22,6 +23,7 @@ export const createProduct = async (req, res) => {
       price: price,
       category: category,
       subcategory: subcategory,
+      images:images,
       slug: slug,
       rating: rating,
       color: color,
@@ -65,7 +67,7 @@ export const updateProduct = async (req, res) => {
         runValidators: true,
       },
     );
-    return res.status(204).json({
+    return res.status(200).json({
       success: true,
       message: "Updated product successfully",
       data: updatedProduct,
