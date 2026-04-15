@@ -9,6 +9,7 @@ import categoryrouter from "./src/Routes/category.route.js";
 import userrouter from "./src/Routes/user.route.js";
 import subcategoryrouter from "./src/Routes/subcategory.route.js"
 import productrouter from "./src/Routes/product.route.js"
+import reviewrouter from "./src/Routes/review.route.js"
 
 // DNS SETUP
 import dns from "dns";
@@ -30,6 +31,8 @@ app.use("/api/categories", categoryrouter);
 app.use("/api/subcategories",subcategoryrouter)
 // product middleware
 app.use("/api/products", productrouter)
+// review middleware
+app.use("/api/reviews",reviewrouter)
 
 app.get("/", (req, res) => {
   res.json({ message: "Hello world!" });
