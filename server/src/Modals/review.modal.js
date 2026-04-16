@@ -24,7 +24,6 @@ const reviewSchema = new mongoose.Schema({
     },
     date : {
         type : Date,
-        required : true
     }
 },{timestamps : true})
 

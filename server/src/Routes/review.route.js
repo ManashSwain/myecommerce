@@ -6,6 +6,6 @@ const router = express.Router();
 router.post("/createreview",createReview);
 router.get("/getreviews",getReview);
 router.patch("/updatereview/:reviewId",updateReview);
-router.delete("deletereview/:reviewId",deleteReview);
+router.delete("/deletereview/:reviewId",deleteReview);
 
 export default router

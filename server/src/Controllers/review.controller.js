@@ -15,7 +15,7 @@ export const createReview = async (req,res) => {
     return res.status(201).json({
         success : true,
         message : "Review created successfully",
-        data : createReview
+        data : createdReview
     })
   }catch(err){
     console.error(err)
@@ -37,7 +37,7 @@ export const getReview = async (req,res)=>{
 // UPDATE REVIEW (patch)
 export const updateReview = async (req,res) => {
    try {
-     const reviewId = req.params.revewId;
+     const reviewId = req.params.reviewId;
      const updatedReview = await Review.findOneAndUpdate({_id : reviewId}, req.body , {
         new : true,
         runValidators : true
