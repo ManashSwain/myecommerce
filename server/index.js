@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 dotenv.config();
 import { connectDb } from "./src/utils/connectDB.js";
 
+// Multer import 
+import { upload } from "./src/utils/multer.js";
 
 // Route imports
 import categoryrouter from "./src/Routes/category.route.js";
@@ -34,6 +36,14 @@ app.use("/api/products", productrouter)
 // review middleware
 app.use("/api/reviews",reviewrouter)
 
+// Test multer route 
+app.post("/photos/upload", upload.array('photos'), (req,res,next)=>{
+   console.log(req.files, req.body)
+   res.json({
+    messsage : "Uploaded",
+    files:req.files
+   })
+})
 app.get("/", (req, res) => {
   res.json({ message: "Hello world!" });
 });
