@@ -12,6 +12,7 @@ import userrouter from "./src/Routes/user.route.js";
 import subcategoryrouter from "./src/Routes/subcategory.route.js"
 import productrouter from "./src/Routes/product.route.js"
 import reviewrouter from "./src/Routes/review.route.js"
+import addressrouter from "./src/Routes/address.route.js"
 
 // DNS SETUP
 import dns from "dns";
@@ -35,6 +36,8 @@ app.use("/api/subcategories",subcategoryrouter)
 app.use("/api/products", productrouter)
 // review middleware
 app.use("/api/reviews",reviewrouter)
+//address middleware
+app.use("/api/address",addressrouter)
 
 // Test multer route 
 app.post("/photos/upload", upload.array('photos'), (req,res,next)=>{
