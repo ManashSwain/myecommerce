@@ -352,7 +352,7 @@ const sidebar = () => {
       </aside>
 
       <div className="p-4 sm:ml-64">
-        <div className="p-4 border-1 border-default border-dashed rounded-base">
+        <div className="p-4 border border-default border-dashed rounded-base">
           <div className="grid grid-cols-3 gap-4 mb-4">
             <div className="flex items-center justify-center h-24 rounded-base bg-neutral-secondary-soft">
               <p className="text-fg-disabled">
