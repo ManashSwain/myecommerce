@@ -4,16 +4,13 @@ import * as React from "react";
 import {
   createBrowserRouter,
   RouterProvider,
-  Link,
 } from "react-router-dom";
+import RootLayout from "./layouts/RootLayout";
 const router = createBrowserRouter([
   {
     path: "/",
     element: (
-      <div>
-        <h1>Hello World</h1>
-        <Link to="about">About Us</Link>
-      </div>
+      <RootLayout/>
     ),
   },
   {
