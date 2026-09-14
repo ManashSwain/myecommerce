@@ -5,7 +5,7 @@ import Sidebar from '../components/sidebar'
 const RootLayout = () => {
   return (
    <>
-    <Navbar/>
+    {/* <Navbar/> */}
     <Sidebar/>
    </>
   )

@@ -1,4 +1,5 @@
 import React from "react";
+
 import {
   Home,
   Users,
@@ -8,7 +9,7 @@ import {
   PieChart,
 } from "lucide-react";
 
-const sidebar = () => {
+const Sidebar = () => {
   return (
     <div>
       <div className="flex h-screen bg-gray-50">
@@ -27,27 +28,27 @@ const sidebar = () => {
 
               <div className="flex items-center gap-3 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 cursor-pointer">
                 <Users size={18} />
-                <span className="text-sm font-medium">Team</span>
+                <span className="text-sm font-medium">Users</span>
               </div>
 
               <div className="flex items-center gap-3 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 cursor-pointer">
                 <Folder size={18} />
-                <span className="text-sm font-medium">Projects</span>
+                <span className="text-sm font-medium">Categories</span>
               </div>
 
               <div className="flex items-center gap-3 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 cursor-pointer">
                 <Calendar size={18} />
-                <span className="text-sm font-medium">Calendar</span>
+                <span className="text-sm font-medium">Sub categoriesdfg</span>
               </div>
 
               <div className="flex items-center gap-3 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 cursor-pointer">
                 <FileText size={18} />
-                <span className="text-sm font-medium">Documents</span>
+                <span className="text-sm font-medium">Products</span>
               </div>
 
               <div className="flex items-center gap-3 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 cursor-pointer">
                 <PieChart size={18} />
-                <span className="text-sm font-medium">Reports</span>
+                <span className="text-sm font-medium">Orders</span>
               </div>
             </div>
 
@@ -57,9 +58,9 @@ const sidebar = () => {
 
               <div className="flex items-center gap-3 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer">
                 <div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-xs font-semibold">
-                  H
+                  Hsf
                 </div>
-                <span className="text-sm">Heroicons</span>
+                <span className="text-sm">Heroiconssfdf</span>
               </div>
 
               <div className="flex items-center gap-3 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer">
@@ -71,9 +72,9 @@ const sidebar = () => {
 
               <div className="flex items-center gap-3 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer">
                 <div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-xs font-semibold">
-                  W
+                  Wdsf
                 </div>
-                <span className="text-sm">Workcation</span>
+                <span className="text-sm">kgfgfdcation</span>
               </div>
             </div>
           </div>
@@ -98,4 +99,4 @@ const sidebar = () => {
   );
 };
 
-export default sidebar;
+export default Sidebar;
