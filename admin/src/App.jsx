@@ -7,6 +7,10 @@ import {
 } from "react-router-dom";
 import RootLayout from "./layouts/RootLayout";
 import Users from "./components/Users";
+import Categories from "./components/Categories";
+import Subcategories from "./components/Subcategories";
+import Products from "./components/Products";
+import Orders from "./components/Orders";
 
 const router = createBrowserRouter([
   {
@@ -15,10 +19,10 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <div>Dashboard</div> },
       { path: "users", element: <Users /> },
-      { path: "categories", element: <div>Categories</div> },
-      { path: "sub-categories", element: <div>Sub categories</div> },
-      { path: "products", element: <div>Products</div> },
-      { path: "orders", element: <div>Orders</div> },
+      { path: "categories", element: <Categories/>},
+      { path: "sub-categories", element: <Subcategories/>},
+      { path: "products", element: <Products/> },
+      { path: "orders", element: <Orders/> },
     ],
   },
 ]);
