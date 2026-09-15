@@ -21,10 +21,10 @@ const menuItems = [
 
 const Sidebar = () => {
   return (
-    <div>
-      <div className="flex h-screen">
+    <div className="fixed">
+      <div className="flex h-screen max-h-screen">
         {/* Sidebar */}
-        <div className="w-64 bg-white border-r flex flex-col justify-between">
+        <div className="w-64 bg-white border-r border-gray-300 flex flex-col justify-between h-screen">
           <div>
             {/* Logo */}
             <div className="p-4 text-blue-600 font-bold text-xl">~</div>
@@ -53,7 +53,7 @@ const Sidebar = () => {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 px-6 overflow-y-auto">
+        <div className="flex-1 px-6 overflow-y-auto  h-screen max-h-scrren">
           <Outlet />
         </div>
       </div>
