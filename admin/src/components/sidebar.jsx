@@ -38,7 +38,7 @@ const Sidebar = () => {
 
               <div className="flex items-center gap-3 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 cursor-pointer">
                 <Calendar size={18} />
-                <span className="text-sm font-medium">Sub categoriesdfg</span>
+                <span className="text-sm font-medium">Sub categories</span>
               </div>
 
               <div className="flex items-center gap-3 px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-100 cursor-pointer">
@@ -51,42 +51,6 @@ const Sidebar = () => {
                 <span className="text-sm font-medium">Orders</span>
               </div>
             </div>
-
-            {/* Teams */}
-            <div className="mt-6">
-              <p className="px-4 text-xs text-gray-400 mb-2">Your teams</p>
-
-              <div className="flex items-center gap-3 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer">
-                <div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-xs font-semibold">
-                  Hsf
-                </div>
-                <span className="text-sm">Heroiconssfdf</span>
-              </div>
-
-              <div className="flex items-center gap-3 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer">
-                <div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-xs font-semibold">
-                  T
-                </div>
-                <span className="text-sm">Tailwind Labs</span>
-              </div>
-
-              <div className="flex items-center gap-3 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer">
-                <div className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 text-xs font-semibold">
-                  Wdsf
-                </div>
-                <span className="text-sm">kgfgfdcation</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Profile */}
-          <div className="p-4 border-t flex items-center gap-3">
-            <img
-              src="https://i.pravatar.cc/40"
-              alt="profile"
-              className="w-8 h-8 rounded-full"
-            />
-            <span className="text-sm font-medium text-gray-700">Tom Cook</span>
           </div>
         </div>
 
