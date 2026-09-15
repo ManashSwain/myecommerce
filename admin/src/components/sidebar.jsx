@@ -22,7 +22,7 @@ const menuItems = [
 const Sidebar = () => {
   return (
     <div>
-      <div className="flex h-screen bg-gray-50">
+      <div className="flex h-screen">
         {/* Sidebar */}
         <div className="w-64 bg-white border-r flex flex-col justify-between">
           <div>
@@ -53,7 +53,7 @@ const Sidebar = () => {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 px-6 overflow-y-auto">
           <Outlet />
         </div>
       </div>
