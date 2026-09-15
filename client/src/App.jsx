@@ -4,6 +4,8 @@ import Homepage from "./pages/Homepage";
 import Categoriespage from "./pages/Categoriespage";
 import Categoryproducts from "./pages/Categoryproducts";
 import Productdetail from "./components/Productdetail";
+import Orderpage from "./pages/Orderpage";
+import History from "./components/History";
 
 function App() {
   return (
@@ -16,6 +18,8 @@ function App() {
             <Route path=":categoryname" element={<Categoryproducts />}></Route>
           </Route>
           <Route path="product/:productId" element={<Productdetail />} />
+          <Route path="orders" element={<Orderpage/>}/>
+          <Route path="history" element={<History/>}/>
         </Route>
       </Routes>
     </>
