@@ -1,24 +1,25 @@
 import React, { useState } from "react";
-import { Pencil, Plus, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import FormModal from "./FormModal";
 
 const emptyForm = { name: "", description: "", image: null, preview: "" };
 
 const CategoryManager = ({ title, singular, initialItems }) => {
   const [items, setItems] = useState(initialItems);
-  const [showForm, setShowForm] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
 
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
-    setShowForm(false);
+    setModalOpen(false);
   };
 
   const openAddForm = () => {
     setForm(emptyForm);
     setEditingId(null);
-    setShowForm(true);
+    setModalOpen(true);
   };
 
   const handleChange = (e) => {
@@ -75,8 +76,7 @@ const CategoryManager = ({ title, singular, initialItems }) => {
       image: null,
       preview: item.image,
     });
-    setShowForm(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setModalOpen(true);
   };
 
   const handleDelete = (id) => {
@@ -102,26 +102,14 @@ const CategoryManager = ({ title, singular, initialItems }) => {
           </button>
         </div>
 
-        {/* Add / Edit form */}
-        {showForm && (
-          <form
-            onSubmit={handleSubmit}
-            className="mt-6 rounded-lg border border-gray-200 bg-gray-50 p-6"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-medium text-gray-900">
-                {editingId ? `Edit ${singular}` : `Add ${singular}`}
-              </h3>
-              <button
-                type="button"
-                onClick={resetForm}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* Add / Edit modal */}
+        <FormModal
+          open={modalOpen}
+          title={editingId ? `Edit ${singular}` : `Add ${singular}`}
+          onClose={resetForm}
+        >
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Name
@@ -172,13 +160,7 @@ const CategoryManager = ({ title, singular, initialItems }) => {
               </div>
             </div>
 
-            <div className="mt-4 flex gap-3">
-              <button
-                type="submit"
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                {editingId ? `Update ${singular}` : `Add ${singular}`}
-              </button>
+            <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={resetForm}
@@ -186,9 +168,15 @@ const CategoryManager = ({ title, singular, initialItems }) => {
               >
                 Cancel
               </button>
+              <button
+                type="submit"
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                {editingId ? `Update ${singular}` : `Add ${singular}`}
+              </button>
             </div>
           </form>
-        )}
+        </FormModal>
 
         {/* Items grid */}
         <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 md:grid-cols-4 lg:gap-x-8">
