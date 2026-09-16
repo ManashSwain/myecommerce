@@ -6,6 +6,7 @@ import Categoryproducts from "./pages/Categoryproducts";
 import Productdetail from "./components/Productdetail";
 import Orderpage from "./pages/Orderpage";
 import History from "./components/History";
+import Checkoutpage from "./pages/Checkoutpage";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Route path="product/:productId" element={<Productdetail />} />
           <Route path="orders" element={<Orderpage/>}/>
           <Route path="history" element={<History/>}/>
+          <Route path="checkout" element={<Checkoutpage/>}/>
         </Route>
       </Routes>
     </>
