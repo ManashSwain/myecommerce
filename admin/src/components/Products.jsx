@@ -1,88 +1,9 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { StarIcon } from "@heroicons/react/20/solid";
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import { toast } from "react-toastify";
 import FormModal from "./FormModal";
-
-// TODO: fetch these from the categories/subcategories APIs once deployed
-const categoryOptions = ["Wallets", "Stationery", "Sketchbooks", "Organizers"];
-const subcategoryOptions = [
-  "Long Wallets",
-  "Pen Sets",
-  "Mini Sketchbooks",
-  "Desk Organizers",
-];
-
-// TODO: replace with data fetched from the products API once deployed
-const sampleProducts = [
-  {
-    id: 1,
-    title: "Organize Basic Set (Walnut)",
-    description: "Beautiful walnut organizer set with multiple compartments.",
-    price: 149,
-    category: "Organizers",
-    subcategory: "Desk Organizers",
-    images: [
-      "https://tailwindcss.com/plus-assets/img/ecommerce-images/category-page-05-image-card-01.jpg",
-    ],
-    slug: "organize-basic-set-walnut",
-    rating: 5,
-    color: "Walnut",
-    size: "Medium",
-    stock: 12,
-    isFeatured: true,
-  },
-  {
-    id: 2,
-    title: "Organize Pen Holder",
-    description: "Minimal pen holder for a tidy desk.",
-    price: 15,
-    category: "Stationery",
-    subcategory: "Pen Sets",
-    images: [
-      "https://tailwindcss.com/plus-assets/img/ecommerce-images/category-page-05-image-card-02.jpg",
-    ],
-    slug: "organize-pen-holder",
-    rating: 5,
-    color: "Black",
-    size: "Small",
-    stock: 40,
-    isFeatured: false,
-  },
-  {
-    id: 3,
-    title: "Organize Sticky Note Holder",
-    description: "Sticky note holder in walnut finish.",
-    price: 15,
-    category: "Organizers",
-    subcategory: "Desk Organizers",
-    images: [
-      "https://tailwindcss.com/plus-assets/img/ecommerce-images/category-page-05-image-card-03.jpg",
-    ],
-    slug: "organize-sticky-note-holder",
-    rating: 5,
-    color: "Walnut",
-    size: "Small",
-    stock: 25,
-    isFeatured: false,
-  },
-  {
-    id: 4,
-    title: "Leather Key Ring (Black)",
-    description: "Hand-stitched leather key ring.",
-    price: 32,
-    category: "Wallets",
-    subcategory: "Long Wallets",
-    images: [
-      "https://tailwindcss.com/plus-assets/img/ecommerce-images/category-page-05-image-card-09.jpg",
-    ],
-    slug: "leather-key-ring-black",
-    rating: 5,
-    color: "Black",
-    size: "One Size",
-    stock: 60,
-    isFeatured: true,
-  },
-];
+import { API_BASE_URL } from "../constants";
 
 const emptyForm = {
   title: "",
@@ -113,16 +34,52 @@ function classNames(...classes) {
 }
 
 const Products = () => {
-  const [products, setProducts] = useState(sampleProducts);
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [subcategories, setSubcategories] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
   const slugTouched = useRef(false);
+
+  const fetchProducts = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/products/getallproducts`);
+      const json = await res.json();
+      setProducts(json.data || []);
+    } catch (err) {
+      setError("Could not load products. Is the server running?");
+    }
+  };
+
+  // Categories and subcategories feed the form's select dropdowns
+  const fetchOptions = async () => {
+    try {
+      const [catRes, subRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/categories/getcategory`),
+        fetch(`${API_BASE_URL}/api/subcategories/getsubcategory`),
+      ]);
+      const catJson = await catRes.json();
+      const subJson = await subRes.json();
+      setCategories(catJson.data || []);
+      setSubcategories(subJson.data || []);
+    } catch (err) {
+      setError("Could not load categories and subcategories.");
+    }
+  };
+
+  useEffect(() => {
+    fetchProducts();
+    fetchOptions();
+  }, []);
 
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
     setModalOpen(false);
+    setError("");
     slugTouched.current = false;
   };
 
@@ -161,55 +118,67 @@ const Products = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const payload = {
-      title: form.title,
-      description: form.description,
-      price: Number(form.price),
-      category: form.category,
-      subcategory: form.subcategory,
-      images: form.previews,
-      slug: form.slug,
-      rating: Number(form.rating),
-      color: form.color,
-      size: form.size,
-      stock: Number(form.stock),
-      isFeatured: form.isFeatured,
-    };
+    setSubmitting(true);
+    setError("");
 
-    if (editingId) {
-      // TODO: call update API (PUT /products/:id) with payload once deployed
-      setProducts((prev) =>
-        prev.map((product) =>
-          product.id === editingId
-            ? {
-                ...product,
-                ...payload,
-                images:
-                  payload.images.length > 0 ? payload.images : product.images,
-              }
-            : product
-        )
+    // Multipart form: image files travel with the text fields, the server
+    // uploads them to Cloudinary and stores only the URLs.
+    const formData = new FormData();
+    formData.append("title", form.title);
+    formData.append("description", form.description);
+    formData.append("price", form.price);
+    formData.append("category", form.category);
+    formData.append("subcategory", form.subcategory);
+    formData.append("slug", form.slug);
+    formData.append("rating", form.rating);
+    formData.append("color", form.color);
+    formData.append("size", form.size);
+    formData.append("stock", form.stock);
+    formData.append("isFeatured", form.isFeatured);
+    form.images.forEach((file) => formData.append("images", file));
+
+    try {
+      const url = editingId
+        ? `${API_BASE_URL}/api/products/updateproduct/${editingId}`
+        : `${API_BASE_URL}/api/products/createproduct`;
+      const res = await fetch(url, {
+        method: editingId ? "PATCH" : "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || json.success === false) {
+        throw new Error(json.message || "Request failed");
+      }
+      toast.success(
+        editingId
+          ? "Product updated successfully!"
+          : "Product created successfully!"
       );
-    } else {
-      // TODO: call create API (POST /products) with payload once deployed
-      setProducts((prev) => [...prev, { id: Date.now(), ...payload }]);
+      await fetchProducts();
+      resetForm();
+    } catch (err) {
+      setError(err.message);
+      toast.error(
+        `Failed to ${editingId ? "update" : "create"} product: ${err.message}`
+      );
+    } finally {
+      setSubmitting(false);
     }
-    resetForm();
   };
 
   const handleEdit = (product) => {
-    setEditingId(product.id);
+    setEditingId(product._id);
     slugTouched.current = true;
     setForm({
       title: product.title,
       description: product.description,
       price: product.price,
-      category: product.category,
-      subcategory: product.subcategory,
+      category: product.category?._id || product.category || "",
+      subcategory: product.subcategory?._id || product.subcategory || "",
       images: [],
-      previews: product.images,
+      previews: product.images || [],
       slug: product.slug,
       rating: product.rating,
       color: product.color,
@@ -220,11 +189,22 @@ const Products = () => {
     setModalOpen(true);
   };
 
-  const handleDelete = (id) => {
-    if (!window.confirm("Are you sure you want to delete this product?"))
-      return;
-    // TODO: call delete API (DELETE /products/:id) once deployed
-    setProducts((prev) => prev.filter((product) => product.id !== id));
+  const handleDelete = async (id) => {
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/products/deleteproduct/${id}`,
+        { method: "DELETE" }
+      );
+      const json = await res.json();
+      if (!res.ok || json.success === false) {
+        throw new Error(json.message || "Delete failed");
+      }
+      toast.success("Product deleted successfully!");
+      setProducts((prev) => prev.filter((product) => product._id !== id));
+    } catch (err) {
+      setError(err.message);
+      toast.error(`Failed to delete product: ${err.message}`);
+    }
   };
 
   return (
@@ -242,6 +222,12 @@ const Products = () => {
             Add Product
           </button>
         </div>
+
+        {error && (
+          <p className="mt-4 rounded-md bg-red-50 px-4 py-2 text-sm text-red-600">
+            {error}
+          </p>
+        )}
 
         {/* Add / Edit modal */}
         <FormModal
@@ -326,9 +312,9 @@ const Products = () => {
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                 >
                   <option value="">Select category</option>
-                  {categoryOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
+                  {categories.map((category) => (
+                    <option key={category._id} value={category._id}>
+                      {category.name}
                     </option>
                   ))}
                 </select>
@@ -346,9 +332,9 @@ const Products = () => {
                   className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
                 >
                   <option value="">Select subcategory</option>
-                  {subcategoryOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
+                  {subcategories.map((subcategory) => (
+                    <option key={subcategory._id} value={subcategory._id}>
+                      {subcategory.name}
                     </option>
                   ))}
                 </select>
@@ -462,9 +448,14 @@ const Products = () => {
               </button>
               <button
                 type="submit"
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                disabled={submitting}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {editingId ? "Update Product" : "Add Product"}
+                {submitting
+                  ? "Saving..."
+                  : editingId
+                    ? "Update Product"
+                    : "Add Product"}
               </button>
             </div>
           </form>
@@ -473,13 +464,15 @@ const Products = () => {
         {/* Products grid */}
         <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4 lg:gap-x-8">
           {products.map((product) => (
-            <div key={product.id} className="group relative">
+            <div key={product._id} className="group relative">
               <div className="relative">
-                <img
-                  alt={product.title}
-                  src={product.images[0]}
-                  className="aspect-square w-full rounded-lg bg-gray-200 object-cover group-hover:opacity-75"
-                />
+                {product.images?.[0] && (
+                  <img
+                    alt={product.title}
+                    src={product.images[0]}
+                    className="aspect-square w-full rounded-lg bg-gray-200 object-cover group-hover:opacity-75"
+                  />
+                )}
                 {product.isFeatured && (
                   <span className="absolute top-2 left-2 rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white">
                     Featured
@@ -490,7 +483,8 @@ const Products = () => {
                 {product.title}
               </h3>
               <p className="mt-1 text-xs text-gray-500">
-                {product.category} · {product.subcategory}
+                {product.category?.name || product.category} ·{" "}
+                {product.subcategory?.name || product.subcategory}
               </p>
               <div className="mt-2 flex items-center">
                 {[0, 1, 2, 3, 4].map((rating) => (
@@ -528,7 +522,7 @@ const Products = () => {
                   Edit
                 </button>
                 <button
-                  onClick={() => handleDelete(product.id)}
+                  onClick={() => handleDelete(product._id)}
                   className="flex items-center gap-1 rounded-md border border-red-200 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
                 >
                   <Trash2 size={14} />
