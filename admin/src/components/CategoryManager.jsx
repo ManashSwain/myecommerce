@@ -1,19 +1,39 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import FormModal from "./FormModal";
+import { API_BASE_URL } from "../constants";
 
 const emptyForm = { name: "", description: "", image: null, preview: "" };
 
-const CategoryManager = ({ title, singular, initialItems }) => {
-  const [items, setItems] = useState(initialItems);
+// Generic manager for category-like resources. `endpoints` provides the
+// API paths: { getAll, create, update(id), remove(id) } relative to API_BASE_URL.
+const CategoryManager = ({ title, singular, endpoints }) => {
+  const [items, setItems] = useState([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const fetchItems = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}${endpoints.getAll}`);
+      const json = await res.json();
+      setItems(json.data || []);
+    } catch (err) {
+      setError(`Could not load ${title.toLowerCase()}. Is the server running?`);
+    }
+  };
+
+  useEffect(() => {
+    fetchItems();
+  }, []);
 
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
     setModalOpen(false);
+    setError("");
   };
 
   const openAddForm = () => {
@@ -37,53 +57,67 @@ const CategoryManager = ({ title, singular, initialItems }) => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingId) {
-      // TODO: call update API (PUT /:id) with { name, description, image } once deployed
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === editingId
-            ? {
-                ...item,
-                name: form.name,
-                description: form.description,
-                image: form.preview || item.image,
-              }
-            : item
-        )
-      );
-    } else {
-      // TODO: call create API (POST /) with { name, description, image } once deployed
-      setItems((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
-          name: form.name,
-          description: form.description,
-          image: form.preview,
-        },
-      ]);
+    setSubmitting(true);
+    setError("");
+
+    // Multipart form so the image file travels with the text fields;
+    // the server uploads it to Cloudinary and stores only the URL.
+    const formData = new FormData();
+    formData.append("name", form.name);
+    formData.append("description", form.description);
+    if (form.image) {
+      formData.append("image", form.image);
     }
-    resetForm();
+
+    try {
+      const url = editingId
+        ? `${API_BASE_URL}${endpoints.update(editingId)}`
+        : `${API_BASE_URL}${endpoints.create}`;
+      const res = await fetch(url, {
+        method: editingId ? "PATCH" : "POST",
+        body: formData,
+      });
+      const json = await res.json();
+      if (!res.ok || json.success === false) {
+        throw new Error(json.message || "Request failed");
+      }
+      await fetchItems();
+      resetForm();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEdit = (item) => {
-    setEditingId(item.id);
+    setEditingId(item._id);
     setForm({
       name: item.name,
       description: item.description,
       image: null,
-      preview: item.image,
+      preview: item.image?.[0] || "",
     });
     setModalOpen(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm(`Are you sure you want to delete this ${singular}?`))
       return;
-    // TODO: call delete API (DELETE /:id) once deployed
-    setItems((prev) => prev.filter((item) => item.id !== id));
+    try {
+      const res = await fetch(`${API_BASE_URL}${endpoints.remove(id)}`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok || json.success === false) {
+        throw new Error(json.message || "Delete failed");
+      }
+      setItems((prev) => prev.filter((item) => item._id !== id));
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   return (
@@ -101,6 +135,12 @@ const CategoryManager = ({ title, singular, initialItems }) => {
             Add {singular}
           </button>
         </div>
+
+        {error && (
+          <p className="mt-4 rounded-md bg-red-50 px-4 py-2 text-sm text-red-600">
+            {error}
+          </p>
+        )}
 
         {/* Add / Edit modal */}
         <FormModal
@@ -170,9 +210,14 @@ const CategoryManager = ({ title, singular, initialItems }) => {
               </button>
               <button
                 type="submit"
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                disabled={submitting}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {editingId ? `Update ${singular}` : `Add ${singular}`}
+                {submitting
+                  ? "Saving..."
+                  : editingId
+                    ? `Update ${singular}`
+                    : `Add ${singular}`}
               </button>
             </div>
           </form>
@@ -181,13 +226,15 @@ const CategoryManager = ({ title, singular, initialItems }) => {
         {/* Items grid */}
         <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 md:grid-cols-4 lg:gap-x-8">
           {items.map((item) => (
-            <div key={item.id} className="group relative">
+            <div key={item._id} className="group relative">
               <div className="h-56 w-full overflow-hidden rounded-md bg-gray-200 lg:h-72 xl:h-80">
-                <img
-                  alt={item.name}
-                  src={item.image}
-                  className="size-full object-cover group-hover:opacity-75"
-                />
+                {item.image?.[0] && (
+                  <img
+                    alt={item.name}
+                    src={item.image[0]}
+                    className="size-full object-cover group-hover:opacity-75"
+                  />
+                )}
               </div>
               <h3 className="mt-4 text-sm font-medium text-gray-900">
                 {item.name}
@@ -204,7 +251,7 @@ const CategoryManager = ({ title, singular, initialItems }) => {
                   Edit
                 </button>
                 <button
-                  onClick={() => handleDelete(item.id)}
+                  onClick={() => handleDelete(item._id)}
                   className="flex items-center gap-1 rounded-md border border-red-200 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
                 >
                   <Trash2 size={14} />

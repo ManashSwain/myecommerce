@@ -1,9 +1,15 @@
 import  {Category}  from "../Modals/category.modal.js";
+import { uploadToCloudinary } from "../utils/cloudinary.js";
 
 // Create Category  (Create)
 export const createcategory = async (req, res) => {
   try {
-    const { name, description, image } = req.body;
+    const { name, description } = req.body;
+    const image = [];
+    if (req.file) {
+      const result = await uploadToCloudinary(req.file.buffer, "ecommerce/categories");
+      image.push(result.secure_url);
+    }
     const category = await Category.create({
       name: name,
       description: description,
@@ -44,12 +50,17 @@ export const getAllCategory = async (req, res) => {
 export const updateCategory = async (req, res) => {
   try {
     const categoryId = req.params.categoryId;
+    const updates = { name: req.body.name, description: req.body.description };
+    if (req.file) {
+      const result = await uploadToCloudinary(req.file.buffer, "ecommerce/categories");
+      updates.image = [result.secure_url];
+    }
     const updatecategory = await Category.findOneAndUpdate(
       { _id: categoryId },
-      req.body,
+      updates,
       { new: true, runValidators: true },
     );
-    if (!updateCategory) {
+    if (!updatecategory) {
       return res.status(404).json({
         success: false,
         message: "Category not found",
@@ -76,7 +87,7 @@ export const deleteCategory = async (req, res) => {
     const deletedCategory = await Category.findOneAndDelete({
       _id: categoryId,
     });
-    if (!deleteCategory) {
+    if (!deletedCategory) {
       return res.status(400).json({
         success: false,
         message: "Category not found",

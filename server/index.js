@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import dotenv from "dotenv";
 dotenv.config();
 import { connectDb } from "./src/utils/connectDB.js";
@@ -28,6 +29,7 @@ const app = express();
 const PORT = 3000;
 
 // Middlewares
+app.use(cors());
 // Route Middlewares
 app.use("/api", userrouter);
 // Express middlewares

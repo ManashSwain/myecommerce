@@ -1,9 +1,15 @@
 import {Subcategory} from "../Modals/subcategory.modal.js"
+import { uploadToCloudinary } from "../utils/cloudinary.js";
 
 // Create subcategory (CREATE)
 export const createSubCategory = async(req,res)=>{
    try {
-    const {name,description,image} = req.body ;
+    const {name,description} = req.body ;
+      const image = [];
+      if (req.file) {
+        const result = await uploadToCloudinary(req.file.buffer, "ecommerce/subcategories");
+        image.push(result.secure_url);
+      }
       const createdSubcategory = await Subcategory.create({
         name :name,
         description:description,
@@ -42,7 +48,18 @@ export const getAllsubcategories = async(req,res)=>{
 export const updatesubcategory = async (req,res)=>{
   try{
      const subcategoryId= req.params.subcategoryid;
-     const updatedcategory = await Subcategory.findOneAndUpdate({_id:subcategoryId},req.body,{new:true,runValidators:true});
+     const updates = { name: req.body.name, description: req.body.description };
+     if (req.file) {
+       const result = await uploadToCloudinary(req.file.buffer, "ecommerce/subcategories");
+       updates.image = [result.secure_url];
+     }
+     const updatedcategory = await Subcategory.findOneAndUpdate({_id:subcategoryId},updates,{new:true,runValidators:true});
+     if (!updatedcategory) {
+       return res.status(404).json({
+        success : false,
+        message : "Subcategory not found"
+       })
+     }
      return res.status(200).json({
       success : true,
       message : "Updated subcategory successfully",
