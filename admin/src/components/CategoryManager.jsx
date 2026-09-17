@@ -113,8 +113,6 @@ const CategoryManager = ({ title, singular, endpoints }) => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm(`Are you sure you want to delete this ${singular}?`))
-      return;
     try {
       const res = await fetch(`${API_BASE_URL}${endpoints.remove(id)}`, {
         method: "DELETE",
