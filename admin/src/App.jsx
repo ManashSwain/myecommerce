@@ -11,6 +11,7 @@ import Categories from "./components/Categories";
 import Subcategories from "./components/Subcategories";
 import Products from "./components/Products";
 import Orders from "./components/Orders";
+import Toast from "./components/Toast";
 
 const router = createBrowserRouter([
   {
@@ -31,6 +32,7 @@ function App() {
   return (
     <>
       <RouterProvider router={router} />
+      <Toast />
     </>
   );
 }

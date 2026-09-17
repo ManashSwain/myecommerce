@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import { toast } from "react-toastify";
 import FormModal from "./FormModal";
 import { API_BASE_URL } from "../constants";
 
@@ -83,10 +84,18 @@ const CategoryManager = ({ title, singular, endpoints }) => {
       if (!res.ok || json.success === false) {
         throw new Error(json.message || "Request failed");
       }
+      toast.success(
+        editingId
+          ? `${singular} updated successfully!`
+          : `${singular} created successfully!`
+      );
       await fetchItems();
       resetForm();
     } catch (err) {
       setError(err.message);
+      toast.error(
+        `Failed to ${editingId ? "update" : "create"} ${singular.toLowerCase()}: ${err.message}`
+      );
     } finally {
       setSubmitting(false);
     }
@@ -114,9 +123,11 @@ const CategoryManager = ({ title, singular, endpoints }) => {
       if (!res.ok || json.success === false) {
         throw new Error(json.message || "Delete failed");
       }
+      toast.success(`${singular} deleted successfully!`);
       setItems((prev) => prev.filter((item) => item._id !== id));
     } catch (err) {
       setError(err.message);
+      toast.error(`Failed to delete ${singular.toLowerCase()}: ${err.message}`);
     }
   };
 
