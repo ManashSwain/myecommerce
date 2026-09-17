@@ -3,8 +3,13 @@ import dotenv from "dotenv";
 dotenv.config();
 import { connectDb } from "./src/utils/connectDB.js";
 
-// Multer import 
+// Multer import
 import { upload } from "./src/utils/multer.js";
+
+// Cloudinary helper
+import { uploadToCloudinary } from "./src/utils/cloudinary.js";
+
+
 
 // Route imports
 import categoryrouter from "./src/Routes/category.route.js";
@@ -39,13 +44,22 @@ app.use("/api/reviews",reviewrouter)
 //address middleware
 app.use("/api/address",addressrouter)
 
-// Test multer route 
-app.post("/photos/upload", upload.array('photos'), (req,res,next)=>{
-   console.log(req.files, req.body)
-   res.json({
-    messsage : "Uploaded",
-    files:req.files
-   })
+// multer + cloudinary route
+app.post("/photos/upload", upload.array('photos'), async (req,res,next)=>{
+   try {
+     const results = await Promise.all(
+       req.files.map((file) => uploadToCloudinary(file.buffer))
+     );
+     res.json({
+       messsage : "Uploaded",
+       files: results.map((result) => ({
+         url: result.secure_url,
+         public_id: result.public_id,
+       })),
+     })
+   } catch (error) {
+     next(error);
+   }
 })
 app.get("/", (req, res) => {
   res.json({ message: "Hello world!" });
