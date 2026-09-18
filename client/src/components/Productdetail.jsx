@@ -1,7 +1,50 @@
 
+  import { useState } from 'react'
+  import { useParams } from 'react-router'
   import { StarIcon } from '@heroicons/react/20/solid'
+  import useAuth from '../customhooks/useAuth'
+  import { API_BASE_URL } from '../constants'
 
 const Productdetail = () => {
+    const { productId } = useParams();
+    const { isSignedIn, user } = useAuth();
+    const [selectedColor, setSelectedColor] = useState("White");
+    const [selectedSize, setSelectedSize] = useState("S");
+    const [adding, setAdding] = useState(false);
+    const [feedback, setFeedback] = useState({ type: "", message: "" });
+
+    const handleAddToBag = async (e) => {
+      e.preventDefault();
+      if (!isSignedIn) {
+        setFeedback({ type: "error", message: "Please sign in to add items to your bag." });
+        return;
+      }
+      setAdding(true);
+      setFeedback({ type: "", message: "" });
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/cart/createcart`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            productId: productId,
+            quantity: 1,
+            color: selectedColor,
+            size: selectedSize,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok || json.success === false) {
+          throw new Error(json.message || "Could not add to bag");
+        }
+        setFeedback({ type: "success", message: "Added to bag!" });
+      } catch (err) {
+        setFeedback({ type: "error", message: err.message });
+      } finally {
+        setAdding(false);
+      }
+    };
+
     const product = {
   name: 'Basic Tee 6-Pack',
   price: '$192',
@@ -151,7 +194,7 @@ function classNames(...classes) {
               </div>
             </div>
 
-            <form className="mt-10">
+            <form className="mt-10" onSubmit={handleAddToBag}>
               {/* Colors */}
               <div>
                 <h3 className="text-sm font-medium text-gray-900">Color</h3>
@@ -161,8 +204,9 @@ function classNames(...classes) {
                     {product.colors.map((color) => (
                       <div key={color.id} className="flex rounded-full outline -outline-offset-1 outline-black/10">
                         <input
-                          defaultValue={color.id}
-                          defaultChecked={color === product.colors[0]}
+                          value={color.name}
+                          checked={selectedColor === color.name}
+                          onChange={(e) => setSelectedColor(e.target.value)}
                           name="color"
                           type="radio"
                           aria-label={color.name}
@@ -190,13 +234,14 @@ function classNames(...classes) {
                   <div className="grid grid-cols-4 gap-3">
                     {product.sizes.map((size) => (
                       <label
-                        key={size.id}
+                        key={size.name}
                         aria-label={size.name}
                         className="group relative flex items-center justify-center rounded-md border border-gray-300 bg-white p-3 has-checked:border-indigo-600 has-checked:bg-indigo-600 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-indigo-600 has-disabled:border-gray-400 has-disabled:bg-gray-200 has-disabled:opacity-25"
                       >
                         <input
-                          defaultValue={size.id}
-                          defaultChecked={size === product.sizes[2]}
+                          value={size.name}
+                          checked={selectedSize === size.name}
+                          onChange={(e) => setSelectedSize(e.target.value)}
                           name="size"
                           type="radio"
                           disabled={!size.inStock}
@@ -213,10 +258,21 @@ function classNames(...classes) {
 
               <button
                 type="submit"
-                className="mt-10 flex w-full items-center justify-center rounded-md border border-transparent bg-indigo-600 px-8 py-3 text-base font-medium text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-hidden"
+                disabled={adding}
+                className="mt-10 flex w-full items-center justify-center rounded-md border border-transparent bg-indigo-600 px-8 py-3 text-base font-medium text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-hidden disabled:opacity-50"
               >
-                Add to bag
+                {adding ? "Adding..." : "Add to bag"}
               </button>
+              {feedback.message && (
+                <p
+                  className={classNames(
+                    feedback.type === "success" ? "text-green-600" : "text-red-600",
+                    "mt-3 text-sm text-center",
+                  )}
+                >
+                  {feedback.message}
+                </p>
+              )}
             </form>
           </div>
 
