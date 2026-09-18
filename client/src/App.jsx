@@ -7,6 +7,10 @@ import Productdetail from "./components/Productdetail";
 import Orderpage from "./pages/Orderpage";
 import History from "./components/History";
 import Checkoutpage from "./pages/Checkoutpage";
+import Aboutus from "./components/Aboutus";
+import Privacypolicy from "./components/Privacypolicy";
+import Licensing from "./components/Licensing";
+import Contact from "./components/Contact";
 
 function App() {
   return (
@@ -22,6 +26,10 @@ function App() {
           <Route path="orders" element={<Orderpage/>}/>
           <Route path="history" element={<History/>}/>
           <Route path="checkout" element={<Checkoutpage/>}/>
+          <Route path="about" element={<Aboutus/>}/>
+          <Route path="policy" element={<Privacypolicy/>}/>
+          <Route path="licensing" element={<Licensing/>}/>
+          <Route path="contact" element={<Contact/>}/>
         </Route>
       </Routes>
     </>
