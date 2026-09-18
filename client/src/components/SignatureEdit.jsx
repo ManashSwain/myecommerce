@@ -49,7 +49,7 @@ const SignatureEdit = () => {
   return (
     <div className="bg-white">
       {/* Banner — brown gradient, headline on the left, image on the right */}
-      <div className="relative overflow-hidden bg-gradient-to-r from-[#221910] via-[#4d3a29] to-[#cbb49c]">
+      <div className="relative overflow-hidden bg-linear-to-r from-[#221910] via-[#4d3a29] to-[#cbb49c]">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid items-stretch gap-8 lg:grid-cols-2">
             <div className="flex flex-col justify-center py-16 sm:py-20 lg:py-28">
@@ -66,7 +66,7 @@ const SignatureEdit = () => {
               <img
                 alt="Signature collection highlight"
                 src="https://tailwindcss.com/plus-assets/img/ecommerce-images/home-page-02-edition-02.jpg"
-                className="h-full max-h-[480px] w-full object-cover object-center"
+                className="h-full max-h-120 w-full object-cover object-center"
               />
             </div>
           </div>
