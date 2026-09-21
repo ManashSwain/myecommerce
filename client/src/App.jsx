@@ -14,6 +14,7 @@ import Contact from "./components/Contact";
 import Faq from "./components/Faq";
 import Wishlistpage from "./pages/Wishlistpage";
 import Savedaddressespage from "./pages/Savedaddressespage";
+import Toast from "./components/Toast";
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
           <Route path="contact" element={<Contact/>}/>
         </Route>
       </Routes>
+      <Toast />
     </>
   );
 }
