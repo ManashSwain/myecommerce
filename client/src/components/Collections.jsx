@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router";
 
 const Collections = () => {
   const callouts = [
@@ -9,7 +10,7 @@ const Collections = () => {
         "https://tailwindcss.com/plus-assets/img/ecommerce-images/home-page-02-edition-01.jpg",
       imageAlt:
         "Desk with leather desk pad, walnut desk organizer, wireless keyboard and mouse, and porcelain mug.",
-      href: "#",
+      href: "/categories/desk-and-office",
     },
     {
       name: "Self-Improvement",
@@ -18,7 +19,7 @@ const Collections = () => {
         "https://tailwindcss.com/plus-assets/img/ecommerce-images/home-page-02-edition-02.jpg",
       imageAlt:
         "Wood table with porcelain mug, leather journal, brass pen, leather key ring, and a houseplant.",
-      href: "#",
+      href: "/categories/self-improvement",
     },
     {
       name: "Travel",
@@ -26,7 +27,7 @@ const Collections = () => {
       imageSrc:
         "https://tailwindcss.com/plus-assets/img/ecommerce-images/home-page-02-edition-03.jpg",
       imageAlt: "Collection of four insulated travel bottles on wooden shelf.",
-      href: "#",
+      href: "/categories/travel",
     },
   ];
   return (
@@ -45,10 +46,10 @@ const Collections = () => {
                     className="w-full rounded-lg bg-white object-cover group-hover:opacity-75 max-sm:h-80 sm:aspect-2/1 lg:aspect-square"
                   />
                   <h3 className="mt-6 text-sm text-gray-500">
-                    <a href={callout.href}>
+                    <Link to={callout.href}>
                       <span className="absolute inset-0" />
                       {callout.name}
-                    </a>
+                    </Link>
                   </h3>
                   <p className="text-base font-semibold text-gray-900">
                     {callout.description}

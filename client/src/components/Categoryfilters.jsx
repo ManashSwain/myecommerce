@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useParams } from "react-router";
 import {
   Dialog,
   DialogBackdrop,
@@ -27,12 +28,90 @@ const sortOptions = [
   { name: "Price: Low to High", href: "#", current: false },
   { name: "Price: High to Low", href: "#", current: false },
 ];
-const subCategories = [
-  { name: "Totes", href: "#" },
-  { name: "Backpacks", href: "#" },
-  { name: "Travel Bags", href: "#" },
-  { name: "Hip Bags", href: "#" },
-  { name: "Laptop Sleeves", href: "#" },
+// TODO: fetch subcategories for the active category from the backend
+const subcategoriesByCategory = {
+  men: ["T-Shirts", "Shirts", "Jeans", "Jackets", "Shoes"],
+  women: ["Dresses", "Tops", "Skirts", "Handbags", "Heels"],
+  "desk-and-office": ["Organizers", "Notebooks", "Pen Sets", "Desk Mats"],
+  "self-improvement": ["Journals", "Planners", "Sketchbooks"],
+  travel: ["Luggage", "Travel Bottles", "Pouches", "Travel Wallets"],
+};
+const defaultSubcategories = ["New Arrivals", "Best Sellers", "Sale"];
+
+// TODO: fetch products of this category from the backend
+const products = [
+  {
+    id: 1,
+    name: "Basic Tee",
+    imageSrc:
+      "https://tailwindcss.com/plus-assets/img/ecommerce-images/product-page-01-related-product-01.jpg",
+    imageAlt: "Front of men's Basic Tee in black.",
+    price: "$35",
+    color: "Black",
+  },
+  {
+    id: 2,
+    name: "Basic Tee",
+    imageSrc:
+      "https://tailwindcss.com/plus-assets/img/ecommerce-images/product-page-01-related-product-02.jpg",
+    imageAlt: "Front of men's Basic Tee in white.",
+    price: "$35",
+    color: "Aspen White",
+  },
+  {
+    id: 3,
+    name: "Basic Tee",
+    imageSrc:
+      "https://tailwindcss.com/plus-assets/img/ecommerce-images/product-page-01-related-product-03.jpg",
+    imageAlt: "Front of men's Basic Tee in dark gray.",
+    price: "$35",
+    color: "Charcoal",
+  },
+  {
+    id: 4,
+    name: "Artwork Tee",
+    imageSrc:
+      "https://tailwindcss.com/plus-assets/img/ecommerce-images/product-page-01-related-product-04.jpg",
+    imageAlt: "Front of men's Artwork Tee in peach.",
+    price: "$35",
+    color: "Iso Dots",
+  },
+  {
+    id: 5,
+    name: "Organize Basic Set",
+    imageSrc:
+      "https://tailwindcss.com/plus-assets/img/ecommerce-images/category-page-05-image-card-01.jpg",
+    imageAlt: "Walnut organizer set.",
+    price: "$149",
+    color: "Walnut",
+  },
+  {
+    id: 6,
+    name: "Organize Pen Holder",
+    imageSrc:
+      "https://tailwindcss.com/plus-assets/img/ecommerce-images/category-page-05-image-card-02.jpg",
+    imageAlt: "Minimal pen holder.",
+    price: "$15",
+    color: "Black",
+  },
+  {
+    id: 7,
+    name: "Sticky Note Holder",
+    imageSrc:
+      "https://tailwindcss.com/plus-assets/img/ecommerce-images/category-page-05-image-card-03.jpg",
+    imageAlt: "Sticky note holder in walnut finish.",
+    price: "$15",
+    color: "Walnut",
+  },
+  {
+    id: 8,
+    name: "Leather Key Ring",
+    imageSrc:
+      "https://tailwindcss.com/plus-assets/img/ecommerce-images/category-page-05-image-card-09.jpg",
+    imageAlt: "Hand-stitched leather key ring.",
+    price: "$32",
+    color: "Black",
+  },
 ];
 const filters = [
   {
@@ -78,6 +157,14 @@ function classNames(...classes) {
 
 const Categoryfilters = () => {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const { categoryname } = useParams();
+  const subCategories = (
+    subcategoriesByCategory[categoryname] ?? defaultSubcategories
+  ).map((name) => ({ name, href: "#" }));
+  const categoryTitle = (categoryname || "")
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
   return (
     <>
       <div className="bg-white">
@@ -205,7 +292,7 @@ const Categoryfilters = () => {
           <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="flex items-baseline justify-between border-b border-gray-200 pt-24 pb-6">
               <h1 className="text-4xl font-bold tracking-tight text-gray-900">
-                New Arrivals
+                {categoryTitle || "Products"}
               </h1>
 
               <div className="flex items-center">
@@ -354,7 +441,38 @@ const Categoryfilters = () => {
                 </form>
 
                 {/* Product grid */}
-                <div className="lg:col-span-3">{/* Your content */}</div>
+                <div className="lg:col-span-3">
+                  <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
+                    {products.map((product) => (
+                      <div key={product.id} className="group relative">
+                        <img
+                          alt={product.imageAlt}
+                          src={product.imageSrc}
+                          className="aspect-square w-full rounded-md bg-gray-200 object-cover group-hover:opacity-75 lg:aspect-auto lg:h-80"
+                        />
+                        <div className="mt-4 flex justify-between">
+                          <div>
+                            <h3 className="text-sm text-gray-700">
+                              <Link to={`/product/${product.id}`}>
+                                <span
+                                  aria-hidden="true"
+                                  className="absolute inset-0"
+                                />
+                                {product.name}
+                              </Link>
+                            </h3>
+                            <p className="mt-1 text-sm text-gray-500">
+                              {product.color}
+                            </p>
+                          </div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {product.price}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </section>
           </main>
