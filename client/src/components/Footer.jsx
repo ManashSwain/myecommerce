@@ -18,25 +18,25 @@ const Footer = () => {
 
           <ul className="flex flex-wrap items-center mb-6 text-sm font-medium text-gray-600 sm:mb-0">
             <li>
-              <a href="#" className="hover:underline mr-4 md:mr-6">
+              <a href="/about" className="hover:underline mr-4 md:mr-6">
                 About
               </a>
             </li>
 
             <li>
-              <a href="#" className="hover:underline mr-4 md:mr-6">
+              <a href="/policy" className="hover:underline mr-4 md:mr-6">
                 Privacy Policy
               </a>
             </li>
 
             <li>
-              <a href="#" className="hover:underline mr-4 md:mr-6">
+              <a href="/licensing" className="hover:underline mr-4 md:mr-6">
                 Licensing
               </a>
             </li>
 
             <li>
-              <a href="#" className="hover:underline">
+              <a href="/contact" className="hover:underline">
                 Contact
               </a>
             </li>
