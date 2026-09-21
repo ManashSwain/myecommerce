@@ -11,6 +11,9 @@ import Aboutus from "./components/Aboutus";
 import Privacypolicy from "./components/Privacypolicy";
 import Licensing from "./components/Licensing";
 import Contact from "./components/Contact";
+import Faq from "./components/Faq";
+import Wishlistpage from "./pages/Wishlistpage";
+import Savedaddressespage from "./pages/Savedaddressespage";
 
 function App() {
   return (
@@ -24,6 +27,9 @@ function App() {
           </Route>
           <Route path="product/:productId" element={<Productdetail />} />
           <Route path="orders" element={<Orderpage/>}/>
+          <Route path="wishlist" element={<Wishlistpage/>}/>
+          <Route path="addresses" element={<Savedaddressespage/>}/>
+          <Route path="faq" element={<Faq/>}/>
           <Route path="history" element={<History/>}/>
           <Route path="checkout" element={<Checkoutpage/>}/>
           <Route path="about" element={<Aboutus/>}/>

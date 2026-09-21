@@ -17,7 +17,10 @@ import {
 
 import {
   Bars3Icon,
+  HeartIcon,
   MagnifyingGlassIcon,
+  MapPinIcon,
+  QuestionMarkCircleIcon,
   ShoppingBagIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
@@ -199,6 +202,32 @@ const Navbar = () => {
     ],
   };
   const [open, setOpen] = useState(false);
+
+  // Custom links shown inside the Clerk user menu (below Manage account)
+  const userMenuItems = (
+    <UserButton.MenuItems>
+      <UserButton.Link
+        label="Wishlist"
+        href="/wishlist"
+        labelIcon={<HeartIcon aria-hidden="true" className="size-4" />}
+      />
+      <UserButton.Link
+        label="Saved addresses"
+        href="/addresses"
+        labelIcon={<MapPinIcon aria-hidden="true" className="size-4" />}
+      />
+      <UserButton.Link
+        label="My orders"
+        href="/orders"
+        labelIcon={<ShoppingBagIcon aria-hidden="true" className="size-4" />}
+      />
+      <UserButton.Link
+        label="FAQ"
+        href="/faq"
+        labelIcon={<QuestionMarkCircleIcon aria-hidden="true" className="size-4" />}
+      />
+    </UserButton.MenuItems>
+  );
   return (
     <>
       {/* cart code start */}
@@ -455,7 +484,7 @@ const Navbar = () => {
           <SignUpButton />
         </Show>
         <Show when="signed-in">
-          <UserButton />
+          <UserButton>{userMenuItems}</UserButton>
         </Show>
                 </div>
                 
@@ -615,7 +644,7 @@ const Navbar = () => {
           <SignUpButton />
         </Show>
         <Show when="signed-in">
-          <UserButton />
+          <UserButton>{userMenuItems}</UserButton>
         </Show>
                     <span aria-hidden="true" className="h-6 w-px bg-gray-200" />
                    
