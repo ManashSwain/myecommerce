@@ -20,6 +20,7 @@ import productrouter from "./src/Routes/product.route.js"
 import reviewrouter from "./src/Routes/review.route.js"
 import addressrouter from "./src/Routes/address.route.js"
 import cartrouter from "./src/Routes/cart.route.js"
+import newsletterrouter from "./src/Routes/newsletter.route.js"
 
 // DNS SETUP
 import dns from "dns";
@@ -48,6 +49,8 @@ app.use("/api/reviews",reviewrouter)
 app.use("/api/address",addressrouter)
 // cart middleware
 app.use("/api/cart",cartrouter)
+// newsletter middleware
+app.use("/api/newsletter",newsletterrouter);
 
 // multer + cloudinary route
 app.post("/photos/upload", upload.array('photos'), async (req,res,next)=>{
