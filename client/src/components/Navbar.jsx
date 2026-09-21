@@ -23,11 +23,11 @@ import {
 } from "@heroicons/react/24/outline";
 import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 
-// import useAuth from "../customhooks/useAuth";
+import useAuth from "../customhooks/useAuth";
 
 const Navbar = () => {
-  // const  {user} = useAuth()
-  // console.log("user>>>", user?.id)
+  const  {user} = useAuth()
+  console.log("user>>>", user?.id)
   // cart view state
   const [cartstate, setcartstate] = useState(false);
   const products = [
