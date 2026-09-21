@@ -4,7 +4,8 @@ import {Newsletter} from "../Modals/newsletter.modal.js";
 // Subscribe to newsletter
 export const subscribeNewsletter = async (req, res) => {
   try {
-    const { email } = req.body;
+    // req.body is undefined when the request has no JSON content-type
+    const { email } = req.body ?? {};
 
     if (!email || typeof email !== "string") {
       return res.status(400).json({
