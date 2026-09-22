@@ -37,8 +37,7 @@ const Newsletter = () => {
           <div className="max-w-xl lg:max-w-lg">
             <h2 className="text-4xl font-semibold tracking-tight text-white">Subscribe to our newsletter</h2>
             <p className="mt-4 text-lg text-gray-300">
-              Nostrud amet eu ullamco nisi aute in ad minim nostrud adipisicing velit quis. Duis tempor incididunt
-              dolore.
+              Stay in the loop with the latest arrivals, exclusive offers, and fashion inspiration. Get new collection updates and special deals delivered straight to your inbox.
             </p>
             <form onSubmit={handleSubscribe} className="mt-6 flex max-w-md gap-x-4">
               <label htmlFor="email-address" className="sr-only">
@@ -71,7 +70,7 @@ const Newsletter = () => {
               </div>
               <dt className="mt-4 text-base font-semibold text-white">Weekly articles</dt>
               <dd className="mt-2 text-base/7 text-gray-400">
-                Non laboris consequat cupidatat laborum magna. Eiusmod non irure cupidatat duis commodo amet.
+                Get access to special discounts, limited-time offers, and early access to selected sales.
               </dd>
             </div>
             <div className="flex flex-col items-start">
@@ -80,7 +79,7 @@ const Newsletter = () => {
               </div>
               <dt className="mt-4 text-base font-semibold text-white">No spam</dt>
               <dd className="mt-2 text-base/7 text-gray-400">
-                Officia excepteur ullamco ut sint duis proident non adipisicing. Voluptate incididunt anim.
+               Only useful updates from us. No unnecessary emails, and you can unsubscribe anytime.
               </dd>
             </div>
           </dl>
