@@ -487,21 +487,6 @@ const Navbar = () => {
           <UserButton>{userMenuItems}</UserButton>
         </Show>
                 </div>
-                
-              </div>
-
-              <div className="border-t border-gray-200 px-4 py-6">
-                <a href="#" className="-m-2 flex items-center p-2">
-                  <img
-                    alt=""
-                    src="https://tailwindcss.com/plus-assets/img/flags/flag-canada.svg"
-                    className="block h-auto w-5 shrink-0"
-                  />
-                  <span className="ml-3 block text-base font-medium text-gray-900">
-                    CAD
-                  </span>
-                  <span className="sr-only">, change currency</span>
-                </a>
               </div>
             </DialogPanel>
           </div>
@@ -509,7 +494,7 @@ const Navbar = () => {
 
         <header className="relative bg-white">
           <p className="flex h-10 items-center justify-center bg-indigo-600 px-4 text-sm font-medium text-white sm:px-6 lg:px-8">
-            Get free delivery on orders over $100
+            Get free delivery on orders over ₹1000
           </p>
 
           <nav aria-label="Top" className="mx-auto w-full px-4 sm:px-6 lg:px-8">
@@ -648,23 +633,6 @@ const Navbar = () => {
         </Show>
                     <span aria-hidden="true" className="h-6 w-px bg-gray-200" />
                    
-                  </div>
-
-                  <div className="hidden lg:ml-8 lg:flex">
-                    <a
-                      href="#"
-                      className="flex items-center text-gray-700 hover:text-gray-800"
-                    >
-                      <img
-                        alt=""
-                        src="https://tailwindcss.com/plus-assets/img/flags/flag-canada.svg"
-                        className="block h-auto w-5 shrink-0"
-                      />
-                      <span className="ml-3 block text-sm font-medium">
-                        CAD
-                      </span>
-                      <span className="sr-only">, change currency</span>
-                    </a>
                   </div>
 
                   {/* Search */}
