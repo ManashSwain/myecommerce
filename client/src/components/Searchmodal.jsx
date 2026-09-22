@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Search, Loader2 } from "lucide-react";
+import {
+  MagnifyingGlassIcon,
+  XMarkIcon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline";
+import { API_BASE_URL } from "../constants";
 
 const Searchmodal = ({ isOpen, onClose }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -46,7 +51,7 @@ const Searchmodal = ({ isOpen, onClose }) => {
         setLoading(true);
 
         const response = await fetch(
-          `/api/products/search?q=${encodeURIComponent(searchTerm)}`
+          `${API_BASE_URL}/api/products/search?q=${encodeURIComponent(searchTerm)}`
         );
 
         const data = await response.json();
@@ -70,47 +75,51 @@ const Searchmodal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50">
-      {/* Background overlay */}
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4">
+      {/* Backdrop — dims the page without blurring it */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-gray-900/50"
         onClick={onClose}
+        aria-hidden="true"
       />
 
-      {/* Modal */}
-      <div className="relative mx-auto mt-16 w-[95%] max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl">
-        {/* Search Header */}
-        <div className="flex items-center gap-3 border-b px-5 py-4">
-          <Search className="h-5 w-5 text-gray-400" />
-
+      {/* Panel */}
+      <div className="relative mt-16 w-full max-w-2xl max-h-[80vh] overflow-y-auto rounded-lg bg-white shadow-xl">
+        {/* Header */}
+        <div className="sticky top-0 flex items-center gap-3 border-b border-gray-200 bg-white px-6 py-4">
+          <MagnifyingGlassIcon
+            aria-hidden="true"
+            className="size-5 text-gray-400"
+          />
           <input
             ref={inputRef}
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search for products..."
-            className="flex-1 text-base outline-none placeholder:text-gray-400"
+            className="flex-1 text-base text-gray-900 outline-none placeholder:text-gray-400"
           />
-
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+            className="text-gray-400 hover:text-gray-600"
           >
-            <X className="h-5 w-5" />
+            <XMarkIcon aria-hidden="true" className="size-5" />
           </button>
         </div>
 
         {/* Results */}
-        <div className="max-h-125 overflow-y-auto">
+        <div>
           {/* Empty state */}
           {!searchTerm.trim() && (
             <div className="px-6 py-12 text-center">
-              <Search className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-
+              <MagnifyingGlassIcon
+                aria-hidden="true"
+                className="mx-auto mb-3 size-10 text-gray-300"
+              />
               <h3 className="text-lg font-medium text-gray-900">
                 Search our products
               </h3>
-
               <p className="mt-1 text-sm text-gray-500">
                 Search for shirts, jeans, hoodies, dresses and more.
               </p>
@@ -120,8 +129,10 @@ const Searchmodal = ({ isOpen, onClose }) => {
           {/* Loading */}
           {loading && (
             <div className="flex items-center justify-center gap-2 px-6 py-10">
-              <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
-
+              <ArrowPathIcon
+                aria-hidden="true"
+                className="size-5 animate-spin text-gray-500"
+              />
               <span className="text-sm text-gray-500">
                 Searching products...
               </span>
@@ -134,7 +145,6 @@ const Searchmodal = ({ isOpen, onClose }) => {
               <h3 className="text-base font-medium text-gray-900">
                 No products found
               </h3>
-
               <p className="mt-1 text-sm text-gray-500">
                 Try searching for something else.
               </p>
@@ -143,21 +153,21 @@ const Searchmodal = ({ isOpen, onClose }) => {
 
           {/* Products */}
           {!loading && products.length > 0 && (
-            <div className="divide-y">
+            <div className="divide-y divide-gray-200">
               {products.map((product) => (
                 <button
                   key={product._id}
-                  className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-gray-50"
+                  className="flex w-full items-center gap-4 px-6 py-4 text-left transition hover:bg-gray-50"
                   onClick={() => {
                     window.location.href = `/product/${product.slug}`;
                   }}
                 >
                   {/* Product image */}
-                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                  <div className="size-16 shrink-0 overflow-hidden rounded-md bg-gray-200">
                     <img
                       src={product.images?.[0]}
                       alt={product.title}
-                      className="h-full w-full object-cover"
+                      className="size-full object-cover"
                     />
                   </div>
 
@@ -166,7 +176,6 @@ const Searchmodal = ({ isOpen, onClose }) => {
                     <h4 className="truncate text-sm font-medium text-gray-900">
                       {product.title}
                     </h4>
-
                     <p className="mt-1 text-sm font-semibold text-gray-700">
                       ₹{product.price}
                     </p>
@@ -182,6 +191,3 @@ const Searchmodal = ({ isOpen, onClose }) => {
 };
 
 export default Searchmodal;
-
-
-

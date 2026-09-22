@@ -27,12 +27,15 @@ import {
 import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 
 import useAuth from "../customhooks/useAuth";
+import Searchmodal from "./Searchmodal";
 
 const Navbar = () => {
   const  {user} = useAuth()
   console.log("user>>>", user?.id)
   // cart view state
   const [cartstate, setcartstate] = useState(false);
+  // search modal state
+  const [searchOpen, setSearchOpen] = useState(false);
   const products = [
     {
       id: 1,
@@ -230,6 +233,7 @@ const Navbar = () => {
   );
   return (
     <>
+      <Searchmodal isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
       {/* cart code start */}
       <div>
         <Dialog
@@ -637,8 +641,9 @@ const Navbar = () => {
 
                   {/* Search */}
                   <div className="flex lg:ml-6">
-                    <a
-                      href="#"
+                    <button
+                      type="button"
+                      onClick={() => setSearchOpen(true)}
                       className="p-2 text-gray-400 hover:text-gray-500"
                     >
                       <span className="sr-only">Search</span>
@@ -646,7 +651,7 @@ const Navbar = () => {
                         aria-hidden="true"
                         className="size-6"
                       />
-                    </a>
+                    </button>
                   </div>
 
                   {/* Cart */}
