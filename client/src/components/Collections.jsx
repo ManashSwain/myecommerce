@@ -1,35 +1,31 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { API_BASE_URL } from "../constants";
+
+const slugify = (text) =>
+  text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/[\s_]+/g, "-")
+    .replace(/-+/g, "-");
 
 const Collections = () => {
-  const callouts = [
-    {
-      name: "Desk and Office",
-      description: "Work from home accessories",
-      imageSrc:
-        "https://tailwindcss.com/plus-assets/img/ecommerce-images/home-page-02-edition-01.jpg",
-      imageAlt:
-        "Desk with leather desk pad, walnut desk organizer, wireless keyboard and mouse, and porcelain mug.",
-      href: "/categories/desk-and-office",
-    },
-    {
-      name: "Self-Improvement",
-      description: "Journals and note-taking",
-      imageSrc:
-        "https://tailwindcss.com/plus-assets/img/ecommerce-images/home-page-02-edition-02.jpg",
-      imageAlt:
-        "Wood table with porcelain mug, leather journal, brass pen, leather key ring, and a houseplant.",
-      href: "/categories/self-improvement",
-    },
-    {
-      name: "Travel",
-      description: "Daily commute essentials",
-      imageSrc:
-        "https://tailwindcss.com/plus-assets/img/ecommerce-images/home-page-02-edition-03.jpg",
-      imageAlt: "Collection of four insulated travel bottles on wooden shelf.",
-      href: "/categories/travel",
-    },
-  ];
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/categories/getcategory`);
+        const json = await res.json();
+        setCategories(json.data || []);
+      } catch (err) {
+        console.error("Could not load categories:", err);
+      }
+    };
+    fetchCategories();
+  }, []);
+
   return (
     <>
       <div className="bg-gray-100">
@@ -38,25 +34,33 @@ const Collections = () => {
             <h2 className="text-2xl font-bold text-gray-900 uppercase text-center">Trending Right now</h2>
 
             <div className="mt-6 space-y-12 lg:grid lg:grid-cols-3 lg:space-y-0 lg:gap-x-6">
-              {callouts.map((callout) => (
-                <div key={callout.name} className="group relative">
-                  <img
-                    alt={callout.imageAlt}
-                    src={callout.imageSrc}
-                    className="w-full rounded-lg bg-white object-cover group-hover:opacity-75 max-sm:h-80 sm:aspect-2/1 lg:aspect-square"
-                  />
+              {categories.map((category) => (
+                <div key={category._id} className="group relative">
+                  {category.image?.[0] && (
+                    <img
+                      alt={category.name}
+                      src={category.image[0]}
+                      className="w-full rounded-lg bg-white object-cover group-hover:opacity-75 max-sm:h-80 sm:aspect-2/1 lg:aspect-square"
+                    />
+                  )}
                   <h3 className="mt-6 text-sm text-gray-500">
-                    <Link to={callout.href}>
+                    <Link to={`/categories/${slugify(category.name)}`}>
                       <span className="absolute inset-0" />
-                      {callout.name}
+                      {category.name}
                     </Link>
                   </h3>
                   <p className="text-base font-semibold text-gray-900">
-                    {callout.description}
+                    {category.description}
                   </p>
                 </div>
               ))}
             </div>
+
+            {categories.length === 0 && (
+              <p className="mt-6 text-sm text-gray-500 text-center">
+                No categories yet.
+              </p>
+            )}
           </div>
         </div>
       </div>

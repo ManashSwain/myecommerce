@@ -200,8 +200,6 @@ const Navbar = () => {
       },
     ],
     pages: [
-      { name: "Company", href: "#" },
-      { name: "Stores", href: "#" },
     ],
   };
   const [open, setOpen] = useState(false);
