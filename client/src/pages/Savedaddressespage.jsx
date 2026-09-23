@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { MapPinIcon, PencilIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
+import FormModal from "../components/FormModal";
 import { API_BASE_URL } from "../constants";
 
 const emptyForm = {
@@ -108,7 +109,6 @@ const Savedaddressespage = () => {
       addressType: address.addressType,
     });
     setFormOpen(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDelete = async (id) => {
@@ -162,16 +162,14 @@ const Savedaddressespage = () => {
           </button>
         </div>
 
-        {/* Add / Edit form */}
-        {formOpen && (
-          <form
-            onSubmit={handleSubmit}
-            className="mt-8 rounded-lg border border-gray-200 p-6"
-          >
-            <h3 className="text-lg font-medium text-gray-900">
-              {editingId ? "Edit address" : "New address"}
-            </h3>
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* Add / Edit modal */}
+        <FormModal
+          open={formOpen}
+          title={editingId ? "Edit address" : "New address"}
+          onClose={resetForm}
+        >
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-gray-700">Full name</label>
                 <input type="text" name="fullName" value={form.fullName} onChange={handleChange} required className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none" />
@@ -242,7 +240,7 @@ const Savedaddressespage = () => {
               </button>
             </div>
           </form>
-        )}
+        </FormModal>
 
         {/* Address list */}
         {loading ? (
