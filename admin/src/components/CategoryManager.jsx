@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "react-toastify";
 import FormModal from "./FormModal";
+import ConfirmModal from "./ConfirmModal";
 import { API_BASE_URL } from "../constants";
 
 const emptyForm = { name: "", description: "", image: null, preview: "" };
@@ -14,6 +15,7 @@ const CategoryManager = ({ title, singular, endpoints }) => {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [error, setError] = useState("");
 
   const fetchItems = async () => {
@@ -112,7 +114,13 @@ const CategoryManager = ({ title, singular, endpoints }) => {
     setModalOpen(true);
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (id) => {
+    setDeleteTarget(id);
+  };
+
+  const confirmDelete = async () => {
+    const id = deleteTarget;
+    setDeleteTarget(null);
     try {
       const res = await fetch(`${API_BASE_URL}${endpoints.remove(id)}`, {
         method: "DELETE",
@@ -231,6 +239,15 @@ const CategoryManager = ({ title, singular, endpoints }) => {
             </div>
           </form>
         </FormModal>
+
+        {/* Delete confirmation modal */}
+        <ConfirmModal
+          open={deleteTarget !== null}
+          title={`Delete ${singular}`}
+          message={`Are you sure you want to delete this ${singular.toLowerCase()}? This action cannot be undone.`}
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
 
         {/* Items grid */}
         <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 md:grid-cols-4 lg:gap-x-8">
