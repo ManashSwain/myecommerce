@@ -4,35 +4,35 @@ import { MinusSmallIcon, PlusSmallIcon } from '@heroicons/react/24/outline'
 
 const faqs = [
   {
-    question: "What's the best thing about Switzerland?",
+    question: "What payment methods do you accept?",
     answer:
-      "I don't know, but the flag is a big plus. Lorem ipsum dolor sit amet consectetur adipisicing elit. Quas cupiditate laboriosam fugiat.",
+      "We accept major credit and debit cards, UPI, and other secure online payment methods.",
   },
   {
-    question: 'How do you make holy water?',
+    question: 'How long does delivery take?',
     answer:
-      'You boil the hell out of it. Lorem ipsum dolor sit amet consectetur adipisicing elit. Magnam aut tempora vitae odio inventore fuga aliquam nostrum quod porro. Delectus quia facere id sequi expedita natus.',
+      'Orders are usually delivered within 3-7 business days, depending on your location.',
   },
   {
-    question: 'What do you call someone with no body and no nose?',
+    question: 'Can I return or exchange an item?',
     answer:
-      'Nobody knows. Lorem ipsum dolor sit amet consectetur adipisicing elit. Culpa, voluptas ipsa quia excepturi, quibusdam natus exercitationem sapiente tempore labore voluptatem.',
+      'Yes. Eligible products can be returned or exchanged within the specified return period.',
   },
   {
-    question: 'Why do you never see elephants hiding in trees?',
+    question: 'How can I track my order?',
     answer:
-      "Because they're so good at it. Lorem ipsum dolor sit amet consectetur adipisicing elit. Quas cupiditate laboriosam fugiat.",
+      "Once your order is shipped, you'll receive tracking details to follow your delivery.",
   },
   {
-    question: "Why can't you hear a pterodactyl go to the bathroom?",
+    question: "How do I choose the right size?",
     answer:
-      'Because the pee is silent. Lorem ipsum dolor sit amet, consectetur adipisicing elit. Ipsam, quas voluptatibus ex culpa ipsum, aspernatur blanditiis fugiat ullam magnam suscipit deserunt illum natus facilis atque vero consequatur! Quisquam, debitis error.',
+      'Check the size guide available on each product page to find the best fit.',
   },
   {
-    question: 'Why did the invisible man turn down the job offer?',
+    question: 'Can I cancel my order?',
     answer:
-      "He couldn't see himself doing it. Lorem ipsum dolor sit, amet consectetur adipisicing elit. Eveniet perspiciatis officiis corrupti tenetur. Temporibus ut voluptatibus, perferendis sed unde rerum deserunt eius.",
-  },
+      "Orders can be cancelled before they are shipped. Once shipped, cancellation may not be available."
+  }
 ]
 const Faq = () => {
   return (
