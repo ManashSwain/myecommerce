@@ -58,16 +58,6 @@ const SignatureEdit = () => {
                 <br />
                 Online Edit
               </h2>
-              <p className="mt-6 text-lg tracking-wide text-white/80 uppercase sm:text-2xl">
-                Only here. Only yours.
-              </p>
-            </div>
-            <div className="hidden lg:block">
-              <img
-                alt="Signature collection highlight"
-                src="https://tailwindcss.com/plus-assets/img/ecommerce-images/home-page-02-edition-02.jpg"
-                className="h-full max-h-120 w-full object-cover object-center"
-              />
             </div>
           </div>
         </div>
@@ -75,14 +65,14 @@ const SignatureEdit = () => {
 
       {/* Cards — negative top margin pulls them up so they sit half on the
           banner and half on the page below */}
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-5">
         <div className="relative z-10 -mt-24 grid grid-cols-2 gap-x-6 gap-y-10 sm:-mt-32 lg:grid-cols-4 xl:gap-x-8">
           {products.map((product) => (
             <div key={product.id} className="group relative">
               <img
                 alt={product.imageAlt}
                 src={product.imageSrc}
-                className="aspect-square w-full rounded-md bg-gray-200 object-cover shadow-lg group-hover:opacity-75 lg:aspect-auto lg:h-80"
+                className="aspect-square w-full rounded-md bg-gray-200 object-cover shadow-lg  lg:aspect-auto lg:h-80"
               />
               <div className="mt-4 flex justify-between">
                 <div>
