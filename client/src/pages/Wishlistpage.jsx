@@ -100,8 +100,10 @@ const Wishlistpage = () => {
 
   return (
     <div className="bg-white">
-      <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
-        <div className="mb-8"><BackToHome /></div>
+      <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+        <BackToHome />
+      </div>
+      <div className="mx-auto max-w-7xl px-4 pt-6 pb-16 sm:px-6 sm:pb-24 lg:px-8">
         <h2 className="text-2xl font-bold tracking-tight text-gray-900">
           Wishlist
         </h2>
