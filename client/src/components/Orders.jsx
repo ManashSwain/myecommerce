@@ -1,4 +1,5 @@
 import React from 'react'
+import BackToHome from './BackToHome'
 
 const Orders = () => {
     const products = [
@@ -44,7 +45,8 @@ function classNames(...classes) {
   return (
    <>
   <div className="bg-gray-50">
-      <div className="mx-auto max-w-2xl pt-16 sm:px-6 sm:py-24 lg:max-w-7xl lg:px-8">
+      <div className="mx-auto max-w-2xl px-4 pt-16 sm:px-6 sm:py-24 lg:max-w-7xl lg:px-8">
+        <div className="mb-8"><BackToHome /></div>
         <div className="space-y-2 px-4 sm:flex sm:items-baseline sm:justify-between sm:space-y-0 sm:px-0">
           <div className="flex sm:items-baseline sm:space-x-4">
             <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Order #54879</h1>

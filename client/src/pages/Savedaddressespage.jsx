@@ -3,6 +3,7 @@ import { MapPinIcon, PencilIcon, PlusIcon, TrashIcon } from "@heroicons/react/24
 import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import FormModal from "../components/FormModal";
+import BackToHome from "../components/BackToHome";
 import { API_BASE_URL } from "../constants";
 
 const emptyForm = {
@@ -145,6 +146,7 @@ const Savedaddressespage = () => {
   return (
     <div className="bg-white">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+        <div className="mb-8"><BackToHome /></div>
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold tracking-tight text-gray-900">
             Saved addresses

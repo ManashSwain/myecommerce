@@ -1,6 +1,7 @@
 import React from 'react'
 import { Disclosure, DisclosureButton, DisclosurePanel } from '@headlessui/react'
 import { MinusSmallIcon, PlusSmallIcon } from '@heroicons/react/24/outline'
+import BackToHome from './BackToHome'
 
 const faqs = [
   {
@@ -40,6 +41,7 @@ const Faq = () => {
     <div className="bg-white -mt-24 ">
       <div className="mx-auto max-w-7xl px-6 py-24 sm:py-32 lg:px-8 lg:py-40">
         <div className="mx-auto max-w-4xl">
+          <div className="mb-8"><BackToHome /></div>
           <h2 className="text-4xl font-semibold tracking-tight text-gray-900 sm:text-5xl ">
             Frequently asked questions
           </h2>

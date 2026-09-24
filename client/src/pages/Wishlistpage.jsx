@@ -3,6 +3,7 @@ import { HeartIcon, TrashIcon, ShoppingBagIcon } from "@heroicons/react/24/outli
 import { Link } from "react-router";
 import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
+import BackToHome from "../components/BackToHome";
 import { API_BASE_URL } from "../constants";
 
 const Wishlistpage = () => {
@@ -100,6 +101,7 @@ const Wishlistpage = () => {
   return (
     <div className="bg-white">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
+        <div className="mb-8"><BackToHome /></div>
         <h2 className="text-2xl font-bold tracking-tight text-gray-900">
           Wishlist
         </h2>
