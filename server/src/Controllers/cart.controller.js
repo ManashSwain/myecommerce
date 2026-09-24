@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Cart } from "../Modals/cart.modal.js";
 import { Product } from "../Modals/product.modal.js";
 
@@ -41,6 +42,12 @@ export const createCart = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "quantity must be at least 1",
+      });
+    }
+    if (!mongoose.isValidObjectId(productId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product ID",
       });
     }
     const product = await Product.findById(productId);
@@ -128,6 +135,12 @@ export const updateCart = async (req, res) => {
         message: "quantity must be at least 1 — use deletecart to remove an item",
       });
     }
+    if (!mongoose.isValidObjectId(productId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product ID",
+      });
+    }
 
     const cart = await Cart.findOne({ userId });
     if (!cart) {
@@ -173,6 +186,12 @@ export const deleteCart = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "productId, color and size are required",
+      });
+    }
+    if (!mongoose.isValidObjectId(productId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product ID",
       });
     }
 

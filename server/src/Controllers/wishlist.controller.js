@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Wishlist } from "../Modals/wishlist.modal.js";
 import { Product } from "../Modals/product.modal.js";
 
@@ -19,6 +20,13 @@ if (!userId || !productId || !color || !size) {
   return res.status(400).json({
     success: false,
     message: "userId, productId, color and size are required",
+  });
+}
+
+if (!mongoose.isValidObjectId(productId)) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid product ID",
   });
 }
 
@@ -121,6 +129,13 @@ if (!productId || !color || !size) {
   return res.status(400).json({
     success: false,
     message: "productId, color and size are required",
+  });
+}
+
+if (!mongoose.isValidObjectId(productId)) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid product ID",
   });
 }
 

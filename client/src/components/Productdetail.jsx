@@ -2,6 +2,8 @@
   import { useState } from 'react'
   import { useParams } from 'react-router'
   import { StarIcon } from '@heroicons/react/20/solid'
+  import { HeartIcon } from '@heroicons/react/24/outline'
+  import { toast } from 'react-toastify'
   import useAuth from '../customhooks/useAuth'
   import { API_BASE_URL } from '../constants'
 
@@ -42,6 +44,36 @@ const Productdetail = () => {
         setFeedback({ type: "error", message: err.message });
       } finally {
         setAdding(false);
+      }
+    };
+
+    const handleAddToWishlist = async () => {
+      if (!isSignedIn) {
+        toast.error("Please sign in to save items to your wishlist.");
+        return;
+      }
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/wishlist`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userId: user.id,
+            productId: productId,
+            color: selectedColor,
+            size: selectedSize,
+          }),
+        });
+        const json = await res.json();
+        if (res.status === 409) {
+          toast.info("This item is already in your wishlist.");
+          return;
+        }
+        if (!res.ok || json.success === false) {
+          throw new Error(json.message || "Could not add to wishlist");
+        }
+        toast.success("Added to wishlist!");
+      } catch (err) {
+        toast.error(err.message);
       }
     };
 
@@ -256,13 +288,23 @@ function classNames(...classes) {
                 </fieldset>
               </div>
 
-              <button
-                type="submit"
-                disabled={adding}
-                className="mt-10 flex w-full items-center justify-center rounded-md border border-transparent bg-indigo-600 px-8 py-3 text-base font-medium text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-hidden disabled:opacity-50"
-              >
-                {adding ? "Adding..." : "Add to bag"}
-              </button>
+              <div className="mt-10 flex gap-3">
+                <button
+                  type="submit"
+                  disabled={adding}
+                  className="flex flex-1 items-center justify-center rounded-md border border-transparent bg-indigo-600 px-8 py-3 text-base font-medium text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-hidden disabled:opacity-50"
+                >
+                  {adding ? "Adding..." : "Add to bag"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddToWishlist}
+                  aria-label="Add to wishlist"
+                  className="flex items-center justify-center rounded-md border border-gray-300 px-4 text-gray-400 hover:border-red-300 hover:text-red-500"
+                >
+                  <HeartIcon aria-hidden="true" className="size-6" />
+                </button>
+              </div>
               {feedback.message && (
                 <p
                   className={classNames(
