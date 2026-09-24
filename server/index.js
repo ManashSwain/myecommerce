@@ -21,6 +21,7 @@ import reviewrouter from "./src/Routes/review.route.js"
 import addressrouter from "./src/Routes/address.route.js"
 import cartrouter from "./src/Routes/cart.route.js"
 import newsletterrouter from "./src/Routes/newsletter.route.js"
+import wishlistRouter from "./src/Routes/wishlist.route.js";
 
 // DNS SETUP
 import dns from "dns";
@@ -51,6 +52,8 @@ app.use("/api/address",addressrouter)
 app.use("/api/cart",cartrouter)
 // newsletter middleware
 app.use("/api/newsletter",newsletterrouter);
+// wishlist middleware
+app.use("/api/wishlist", wishlistRouter);
 
 // multer + cloudinary route
 app.post("/photos/upload", upload.array('photos'), async (req,res,next)=>{
