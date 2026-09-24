@@ -5,8 +5,10 @@ const Aboutus = () => {
   return (
     <>
 
-<div className="mx-auto max-w-4xl space-y-6 px-4 py-16 text-gray-600 sm:px-6 sm:py-24 lg:px-8">
-  <BackToHome />
+<div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+    <BackToHome />
+  </div>
+<div className="mx-auto max-w-4xl space-y-6 px-4 pt-6 pb-16 text-gray-600 sm:px-6 sm:pb-24 lg:px-8">
   <h2 className="text-3xl font-bold tracking-tight text-gray-900">
     About Us
   </h2>
