@@ -4,11 +4,14 @@ const reviewSchema = new mongoose.Schema({
     userId : {
         type : mongoose.Schema.Types.ObjectId,
         ref: "User",
-        required : true
     },
     clerkId : {
         type : String,
         required : true
+    },
+    userName : {
+        type : String,
+        default : "Anonymous"
     },
     productId : {
        type : mongoose.Schema.Types.ObjectId,

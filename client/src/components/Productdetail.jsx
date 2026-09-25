@@ -5,6 +5,7 @@
   import { HeartIcon } from '@heroicons/react/24/outline'
   import { toast } from 'react-toastify'
   import useAuth from '../customhooks/useAuth'
+  import Productreviews from './Productreviews'
   import { API_BASE_URL } from '../constants'
 
 const Productdetail = () => {
@@ -354,6 +355,7 @@ function classNames(...classes) {
       </div>
     </div>
 
+    <Productreviews productId={productId} />
 
     </>
   )
