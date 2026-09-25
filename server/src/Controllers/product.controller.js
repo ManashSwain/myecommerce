@@ -1,6 +1,23 @@
 import { Product } from "../Modals/product.modal.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 
+// Variants arrive as a JSON string in multipart form data
+const parseVariants = (raw) => {
+  if (!raw) return [];
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) return null;
+  return parsed.map((variant) => ({
+    color: variant.color,
+    size: variant.size,
+    stock: Number(variant.stock),
+  }));
+};
+
 // CREATE PRODUCT (post)
 export const createProduct = async (req, res) => {
   try {
@@ -13,6 +30,13 @@ export const createProduct = async (req, res) => {
       );
       results.forEach((result) => images.push(result.secure_url));
     }
+    const variants = parseVariants(req.body.variants);
+    if (variants === null) {
+      return res.status(400).json({
+        success: false,
+        message: "Variants must be a valid JSON array",
+      });
+    }
     const createdProduct = await Product.create({
       title: req.body.title,
       description: req.body.description,
@@ -22,9 +46,7 @@ export const createProduct = async (req, res) => {
       images: images,
       slug: req.body.slug,
       rating: Number(req.body.rating) || 0,
-      color: req.body.color,
-      size: req.body.size,
-      stock: Number(req.body.stock),
+      variants: variants,
       isFeatured: req.body.isFeatured === "true",
     });
     return res.status(201).json({
@@ -63,6 +85,13 @@ export const getProduct = async (req, res) => {
 export const updateProduct = async (req, res) => {
   try {
     const productId = req.params.productId;
+    const variants = parseVariants(req.body.variants);
+    if (variants === null) {
+      return res.status(400).json({
+        success: false,
+        message: "Variants must be a valid JSON array",
+      });
+    }
     const updates = {
       title: req.body.title,
       description: req.body.description,
@@ -71,9 +100,7 @@ export const updateProduct = async (req, res) => {
       subcategory: req.body.subcategory,
       slug: req.body.slug,
       rating: Number(req.body.rating) || 0,
-      color: req.body.color,
-      size: req.body.size,
-      stock: Number(req.body.stock),
+      variants: variants,
       isFeatured: req.body.isFeatured === "true",
     };
     // Only replace images when new files are uploaded

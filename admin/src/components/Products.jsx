@@ -16,9 +16,7 @@ const emptyForm = {
   previews: [],
   slug: "",
   rating: 0,
-  color: "",
-  size: "",
-  stock: "",
+  variants: [],
   isFeatured: false,
 };
 
@@ -29,6 +27,13 @@ const slugify = (text) =>
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/[\s_]+/g, "-")
     .replace(/-+/g, "-");
+
+// Sum of all variant stocks (falls back to legacy product.stock)
+const totalStock = (product) =>
+  (product.variants || []).reduce(
+    (sum, variant) => sum + (variant.stock || 0),
+    product.stock || 0
+  );
 
 function classNames(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -120,6 +125,29 @@ const Products = () => {
     }));
   };
 
+  const handleVariantChange = (index, field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((variant, i) =>
+        i === index ? { ...variant, [field]: value } : variant
+      ),
+    }));
+  };
+
+  const addVariant = () => {
+    setForm((prev) => ({
+      ...prev,
+      variants: [...prev.variants, { color: "", size: "", stock: "" }],
+    }));
+  };
+
+  const removeVariant = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      variants: prev.variants.filter((_, i) => i !== index),
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -135,9 +163,7 @@ const Products = () => {
     formData.append("subcategory", form.subcategory);
     formData.append("slug", form.slug);
     formData.append("rating", form.rating);
-    formData.append("color", form.color);
-    formData.append("size", form.size);
-    formData.append("stock", form.stock);
+    formData.append("variants", JSON.stringify(form.variants));
     formData.append("isFeatured", form.isFeatured);
     form.images.forEach((file) => formData.append("images", file));
 
@@ -183,9 +209,11 @@ const Products = () => {
       previews: product.images || [],
       slug: product.slug,
       rating: product.rating,
-      color: product.color,
-      size: product.size,
-      stock: product.stock,
+      variants: (product.variants || []).map((variant) => ({
+        color: variant.color,
+        size: variant.size,
+        stock: variant.stock,
+      })),
       isFeatured: product.isFeatured,
     });
     setModalOpen(true);
@@ -294,22 +322,6 @@ const Products = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">
-                  Stock
-                </label>
-                <input
-                  type="number"
-                  name="stock"
-                  value={form.stock}
-                  onChange={handleChange}
-                  required
-                  min="0"
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="0"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
                   Category
                 </label>
                 <select
@@ -348,32 +360,81 @@ const Products = () => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Color
-                </label>
-                <input
-                  type="text"
-                  name="color"
-                  value={form.color}
-                  onChange={handleChange}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="e.g. Black"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Size
-                </label>
-                <input
-                  type="text"
-                  name="size"
-                  value={form.size}
-                  onChange={handleChange}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
-                  placeholder="e.g. M, L, XL"
-                />
+              <div className="sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Variants
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addVariant}
+                    className="flex items-center gap-1 rounded-md border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-100"
+                  >
+                    <Plus size={14} />
+                    Add Variant
+                  </button>
+                </div>
+                {form.variants.length === 0 ? (
+                  <p className="mt-2 text-sm text-gray-500">
+                    No variants yet. Click "Add Variant" to add a color/size
+                    combination.
+                  </p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 text-xs font-medium text-gray-500">
+                      <span>Color</span>
+                      <span>Size</span>
+                      <span>Stock</span>
+                      <span />
+                    </div>
+                    {form.variants.map((variant, index) => (
+                      <div
+                        key={index}
+                        className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2"
+                      >
+                        <input
+                          type="text"
+                          value={variant.color}
+                          onChange={(e) =>
+                            handleVariantChange(index, "color", e.target.value)
+                          }
+                          required
+                          placeholder="Blue"
+                          className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                        />
+                        <input
+                          type="text"
+                          value={variant.size}
+                          onChange={(e) =>
+                            handleVariantChange(index, "size", e.target.value)
+                          }
+                          required
+                          placeholder="M"
+                          className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          value={variant.stock}
+                          onChange={(e) =>
+                            handleVariantChange(index, "stock", e.target.value)
+                          }
+                          required
+                          placeholder="0"
+                          className="block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeVariant(index)}
+                          aria-label="Remove variant"
+                          className="rounded-md border border-red-200 p-2 text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
@@ -523,11 +584,11 @@ const Products = () => {
                 </p>
                 <p
                   className={classNames(
-                    product.stock > 0 ? "text-gray-500" : "text-red-600",
+                    totalStock(product) > 0 ? "text-gray-500" : "text-red-600",
                     "text-xs"
                   )}
                 >
-                  {product.stock > 0 ? `${product.stock} in stock` : "Out of stock"}
+                  {totalStock(product) > 0 ? `${totalStock(product)} in stock` : "Out of stock"}
                 </p>
               </div>
               <div className="mt-3 flex gap-2">
