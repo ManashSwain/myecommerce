@@ -1,57 +1,80 @@
 import mongoose from "mongoose";
 
+const variantSchema = new mongoose.Schema(
+  {
+    color: {
+      type: String,
+      required: true,
+    },
+
+    size: {
+      type: String,
+      required: true,
+    },
+
+    stock: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+  },
+  { _id: true }
+);
+
 const productSchema = new mongoose.Schema(
   {
     title: {
       type: String,
       required: true,
     },
+
     description: {
       type: String,
       required: true,
     },
+
     price: {
       type: Number,
       required: true,
     },
+
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
       required: true,
     },
+
     subcategory: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Subcategory",
       required: true,
     },
-    images: [{ type: String }],
+
+    images: [
+      {
+        type: String,
+      },
+    ],
+
     slug: {
       type: String,
       required: true,
     },
+
     rating: {
       type: Number,
       default: 0,
     },
-    color: {
-      type: String,
-      required: true,
-    },
-    size: {
-      type: String,
-      required: true,
-    },
-    stock: {
-      type: Number,
-      required: true,
-    },
+
+    variants: [variantSchema],
+
     isFeatured: {
       type: Boolean,
-      required: false,
       default: false,
     },
   },
-  { timestamps: true },
+
+  { timestamps: true }
 );
 
 export const Product =
