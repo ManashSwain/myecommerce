@@ -8,7 +8,7 @@ const Homepage = () => {
   return (
    <>
    <Promosection/>
-   <Collections/>
+   <Collections limit={3} showMoreLink />
    <SignatureEdit/>
    <Productlist/>
    <Newsletter/>

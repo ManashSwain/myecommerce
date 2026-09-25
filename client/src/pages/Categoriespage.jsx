@@ -4,7 +4,7 @@ import Collections from '../components/Collections'
 const Categorypage = () => {
   return (
   <>
-   <Collections/>
+   <Collections title="All categories" />
   </>
   )
 }

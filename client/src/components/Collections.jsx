@@ -10,8 +10,9 @@ const slugify = (text) =>
     .replace(/[\s_]+/g, "-")
     .replace(/-+/g, "-");
 
-const Collections = () => {
+const Collections = ({ title = "Trending Right now", limit, showMoreLink = false }) => {
   const [categories, setCategories] = useState([]);
+  const visibleCategories = limit ? categories.slice(0, limit) : categories;
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -31,10 +32,10 @@ const Collections = () => {
       <div className="bg-gray-100">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl py-16 sm:py-24 lg:max-w-none lg:py-32">
-            <h2 className="text-2xl font-bold text-gray-900 uppercase text-center">Trending Right now</h2>
+            <h2 className="text-2xl font-bold text-gray-900 uppercase text-center">Trending Categories Right now</h2>
 
             <div className="mt-6 space-y-12 lg:grid lg:grid-cols-3 lg:space-y-0 lg:gap-x-6">
-              {categories.map((category) => (
+              {visibleCategories.map((category) => (
                 <div key={category._id} className="group relative">
                   {category.image?.[0] && (
                     <img
@@ -60,6 +61,17 @@ const Collections = () => {
               <p className="mt-6 text-sm text-gray-500 text-center">
                 No categories yet.
               </p>
+            )}
+
+            {showMoreLink && limit && categories.length > limit && (
+              <div className="mt-12 text-center">
+                <Link
+                  to="/categories"
+                  className="inline-block rounded-md bg-indigo-600 px-8 py-3 text-sm font-medium text-white hover:bg-indigo-700"
+                >
+                  View other categories
+                </Link>
+              </div>
             )}
           </div>
         </div>
