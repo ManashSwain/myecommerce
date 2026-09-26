@@ -5,6 +5,7 @@ import { ArrowLeftIcon, HeartIcon, MinusIcon, PlusIcon } from "@heroicons/react/
 import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import Productreviews from "./Productreviews";
+import Sizechart from "./Sizechart";
 import { API_BASE_URL } from "../constants";
 import { getCart, updateCartQuantity, removeCartItem } from "../utils/cart";
 
@@ -25,6 +26,7 @@ const Productdetail = () => {
   const [cart, setCart] = useState(null);
   const [stepperBusy, setStepperBusy] = useState(false);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
+  const [sizeChartOpen, setSizeChartOpen] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -373,7 +375,18 @@ const Productdetail = () => {
                 {/* Sizes — for the selected color, out-of-stock disabled */}
                 {allSizes.length > 0 && (
                   <div className="mt-10">
-                    <h3 className="text-sm font-medium text-gray-900">Size</h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-medium text-gray-900">
+                        Size
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => setSizeChartOpen(true)}
+                        className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                      >
+                        Size chart
+                      </button>
+                    </div>
                     <fieldset aria-label="Choose a size" className="mt-4">
                       <div className="grid grid-cols-4 gap-3">
                         {allSizes.map((size) => (
@@ -491,6 +504,8 @@ const Productdetail = () => {
       </div>
 
       <Productreviews productId={productId} />
+
+      <Sizechart open={sizeChartOpen} onClose={() => setSizeChartOpen(false)} />
     </>
   );
 };
