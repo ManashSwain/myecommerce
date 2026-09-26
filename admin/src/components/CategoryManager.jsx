@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Trash2 } from "lucide-react";
+import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { toast } from "react-toastify";
 import FormModal from "./FormModal";
 import ConfirmModal from "./ConfirmModal";
@@ -17,6 +18,7 @@ const CategoryManager = ({ title, singular, endpoints }) => {
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
 
   const fetchItems = async () => {
     try {
@@ -31,6 +33,19 @@ const CategoryManager = ({ title, singular, endpoints }) => {
   useEffect(() => {
     fetchItems();
   }, []);
+
+  // Filter items by name or description (case-insensitive)
+  const filteredItems = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return items;
+    return items.filter((item) =>
+      [item.name, item.description]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(term)
+    );
+  }, [items, search]);
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -153,6 +168,28 @@ const CategoryManager = ({ title, singular, endpoints }) => {
           </button>
         </div>
 
+        {/* Search */}
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <div className="relative w-full sm:max-w-xs">
+            <MagnifyingGlassIcon
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={`Search ${title.toLowerCase()} by name or description`}
+              className="block w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-10 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          {search.trim() && (
+            <p className="shrink-0 text-sm text-gray-500">
+              {filteredItems.length} of {items.length} shown
+            </p>
+          )}
+        </div>
+
         {error && (
           <p className="mt-4 rounded-md bg-red-50 px-4 py-2 text-sm text-red-600">
             {error}
@@ -251,7 +288,7 @@ const CategoryManager = ({ title, singular, endpoints }) => {
 
         {/* Items grid */}
         <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 md:grid-cols-4 lg:gap-x-8">
-          {items.map((item) => (
+          {filteredItems.map((item) => (
             <div key={item._id} className="group relative">
               <div className="h-56 w-full overflow-hidden rounded-md bg-gray-200 lg:h-72 xl:h-80">
                 {item.image?.[0] && (
@@ -291,6 +328,12 @@ const CategoryManager = ({ title, singular, endpoints }) => {
         {items.length === 0 && (
           <p className="mt-6 text-sm text-gray-500">
             No {title.toLowerCase()} yet. Click "Add {singular}" to create one.
+          </p>
+        )}
+
+        {items.length > 0 && filteredItems.length === 0 && (
+          <p className="mt-6 text-sm text-gray-500">
+            No {title.toLowerCase()} match "{search.trim()}".
           </p>
         )}
       </div>
