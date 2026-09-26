@@ -56,10 +56,16 @@ const Productdetail = () => {
 
   const handleColorChange = (color) => {
     setSelectedColor(color);
-    const firstInStock = (product.variants || []).find(
-      (v) => v.color === color && v.stock > 0
+    // Keep the size if it exists for this color, else pick the first available
+    const stillAvailable = (product.variants || []).some(
+      (v) => v.color === color && v.size === selectedSize && v.stock > 0
     );
-    setSelectedSize(firstInStock?.size || "");
+    if (!stillAvailable) {
+      const firstInStock = (product.variants || []).find(
+        (v) => v.color === color && v.stock > 0
+      );
+      setSelectedSize(firstInStock?.size || "");
+    }
   };
 
   const handleAddToBag = async (e) => {
@@ -154,9 +160,13 @@ const Productdetail = () => {
 
   const images = product.images || [];
   const colors = [...new Set((product.variants || []).map((v) => v.color))];
-  const sizesForColor = (product.variants || []).filter(
-    (v) => v.color === selectedColor
-  );
+  // Every size this product comes in, across all colors
+  const allSizes = [...new Set((product.variants || []).map((v) => v.size))];
+  // A size is selectable only if the selected color has it in stock
+  const isSizeAvailable = (size) =>
+    (product.variants || []).some(
+      (v) => v.color === selectedColor && v.size === size && v.stock > 0
+    );
 
   return (
     <>
@@ -278,21 +288,22 @@ const Productdetail = () => {
                   <div>
                     <h3 className="text-sm font-medium text-gray-900">Color</h3>
                     <fieldset aria-label="Choose a color" className="mt-4">
-                      <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex items-center gap-x-3">
                         {colors.map((color) => (
                           <button
                             key={color}
                             type="button"
                             onClick={() => handleColorChange(color)}
+                            aria-label={color}
+                            title={color}
+                            style={{ backgroundColor: color.toLowerCase() }}
                             className={classNames(
                               selectedColor === color
-                                ? "border-indigo-600 bg-indigo-600 text-white"
-                                : "border-gray-300 bg-white text-gray-900 hover:bg-gray-100",
-                              "rounded-md border px-4 py-2 text-sm font-medium"
+                                ? "outline-2 outline-offset-2 outline-indigo-600"
+                                : "outline -outline-offset-1 outline-black/10",
+                              "size-8 rounded-full outline"
                             )}
-                          >
-                            {color}
-                          </button>
+                          />
                         ))}
                       </div>
                     </fieldset>
@@ -300,25 +311,25 @@ const Productdetail = () => {
                 )}
 
                 {/* Sizes — for the selected color, out-of-stock disabled */}
-                {sizesForColor.length > 0 && (
+                {allSizes.length > 0 && (
                   <div className="mt-10">
                     <h3 className="text-sm font-medium text-gray-900">Size</h3>
                     <fieldset aria-label="Choose a size" className="mt-4">
                       <div className="grid grid-cols-4 gap-3">
-                        {sizesForColor.map((variant) => (
+                        {allSizes.map((size) => (
                           <button
-                            key={variant.size}
+                            key={size}
                             type="button"
-                            onClick={() => setSelectedSize(variant.size)}
-                            disabled={variant.stock === 0}
+                            onClick={() => setSelectedSize(size)}
+                            disabled={!isSizeAvailable(size)}
                             className={classNames(
-                              selectedSize === variant.size
+                              selectedSize === size && isSizeAvailable(size)
                                 ? "border-indigo-600 bg-indigo-600 text-white"
-                                : "border-gray-300 bg-white text-gray-900 hover:bg-gray-100",
-                              "rounded-md border p-3 text-sm font-medium uppercase disabled:cursor-not-allowed disabled:bg-gray-200 disabled:opacity-40"
+                                : "border-gray-300 bg-white text-gray-900 hover:bg-gray-50",
+                              "rounded-md border p-3 text-sm font-medium uppercase disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
                             )}
                           >
-                            {variant.size}
+                            {size}
                           </button>
                         ))}
                       </div>
