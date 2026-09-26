@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { Order } from "../Modals/order.modal.js";
 import { Cart } from "../Modals/cart.modal.js";
+import { Product } from "../Modals/product.modal.js";
 
 const TAX_RATE = 0.0863;
 
@@ -63,12 +64,28 @@ export const createOrder = async (req, res) => {
         quantity: item.quantity,
         color: item.color,
         size: item.size,
+        // keep the populated product so we can validate/update stock below
+        _product: item.product,
       }));
 
     if (items.length === 0) {
       return res
         .status(400)
         .json({ success: false, message: "Your cart has no valid products" });
+    }
+
+    // Validate stock for every line before doing anything destructive
+    for (const item of items) {
+      const variant = (item._product.variants || []).find(
+        (v) => v.color === item.color && v.size === item.size
+      );
+      const available = variant ? variant.stock : 0;
+      if (available < item.quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `"${item.title}" (${item.color} / ${item.size}) only has ${available} left in stock.`,
+        });
+      }
     }
 
     const subtotal = items.reduce(
@@ -83,7 +100,7 @@ export const createOrder = async (req, res) => {
       userId,
       orderNumber: generateOrderNumber(),
       contactEmail,
-      items,
+      items: items.map(({ _product, ...rest }) => rest),
       shippingAddress,
       deliveryMethod,
       subtotal,
@@ -92,6 +109,17 @@ export const createOrder = async (req, res) => {
       total,
       status: "placed",
     });
+
+    // Reduce stock for the ordered variants now that the order is placed.
+    // Stock lives on each variant (matched by color + size).
+    await Promise.all(
+      items.map((item) =>
+        Product.updateOne(
+          { _id: item.product, "variants.color": item.color, "variants.size": item.size },
+          { $inc: { "variants.$.stock": -item.quantity } }
+        )
+      )
+    );
 
     // Clear the cart now that the order is placed
     cart.items = [];
