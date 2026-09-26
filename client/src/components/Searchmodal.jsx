@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import {
   MagnifyingGlassIcon,
   XMarkIcon,
   ArrowPathIcon,
+  PhotoIcon,
 } from "@heroicons/react/24/outline";
 import { API_BASE_URL } from "../constants";
 
 const Searchmodal = ({ isOpen, onClose }) => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -39,25 +42,24 @@ const Searchmodal = ({ isOpen, onClose }) => {
     };
   }, [isOpen, onClose]);
 
-  // Search products
+  // Search products (debounced)
   useEffect(() => {
-    if (!searchTerm.trim()) {
+    const term = searchTerm.trim();
+    if (!term) {
       setProducts([]);
+      setLoading(false);
       return;
     }
 
+    setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        setLoading(true);
-
         const response = await fetch(
-          `${API_BASE_URL}/api/products/search?q=${encodeURIComponent(searchTerm)}`
+          `${API_BASE_URL}/api/products/search?q=${encodeURIComponent(term)}`
         );
-
-        const data = await response.json();
-
-        if (response.ok) {
-          setProducts(data);
+        const json = await response.json();
+        if (response.ok && json.success !== false) {
+          setProducts(json.data || []);
         } else {
           setProducts([]);
         }
@@ -71,6 +73,21 @@ const Searchmodal = ({ isOpen, onClose }) => {
 
     return () => clearTimeout(timer);
   }, [searchTerm]);
+
+  // Open a product's detail page and reset the modal
+  const openProduct = (product) => {
+    setSearchTerm("");
+    setProducts([]);
+    onClose();
+    navigate(`/product/${product._id}`);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && products.length > 0) {
+      e.preventDefault();
+      openProduct(products[0]);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -96,6 +113,7 @@ const Searchmodal = ({ isOpen, onClose }) => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Search for products..."
             className="flex-1 text-base text-gray-900 outline-none placeholder:text-gray-400"
           />
@@ -158,17 +176,22 @@ const Searchmodal = ({ isOpen, onClose }) => {
                 <button
                   key={product._id}
                   className="flex w-full items-center gap-4 px-6 py-4 text-left transition hover:bg-gray-50"
-                  onClick={() => {
-                    window.location.href = `/product/${product.slug}`;
-                  }}
+                  onClick={() => openProduct(product)}
                 >
                   {/* Product image */}
-                  <div className="size-16 shrink-0 overflow-hidden rounded-md bg-gray-200">
-                    <img
-                      src={product.images?.[0]}
-                      alt={product.title}
-                      className="size-full object-cover"
-                    />
+                  <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-gray-100">
+                    {product.images?.[0] ? (
+                      <img
+                        src={product.images[0]}
+                        alt={product.title}
+                        className="size-full object-cover"
+                      />
+                    ) : (
+                      <PhotoIcon
+                        aria-hidden="true"
+                        className="size-6 text-gray-300"
+                      />
+                    )}
                   </div>
 
                   {/* Product information */}

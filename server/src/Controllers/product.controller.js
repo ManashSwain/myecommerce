@@ -93,6 +93,43 @@ export const getProduct = async (req, res) => {
   }
 };
 
+// SEARCH PRODUCTS (get)
+// Free-text search across title, description and slug. Returns a compact
+// list (only the fields the search UI needs) to keep the payload small.
+export const searchProducts = async (req, res) => {
+  try {
+    const q = (req.query.q || "").trim();
+    if (!q) {
+      return res.status(200).json({
+        success: true,
+        message: "No search term provided",
+        data: [],
+      });
+    }
+
+    // Escape regex special chars so user input is treated literally
+    const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(escaped, "i");
+
+    const products = await Product.find({
+      $or: [{ title: regex }, { description: regex }, { slug: regex }],
+    })
+      .select("title price images slug variants")
+      .limit(20);
+
+    return res.status(200).json({
+      success: true,
+      message: "Fetched search results successfully",
+      data: products,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 // GET SINGLE PRODUCT BY ID (get)
 export const getProductById = async (req, res) => {
   try {
