@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { StarIcon } from "@heroicons/react/20/solid";
-import { HeartIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, HeartIcon } from "@heroicons/react/24/outline";
 import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import Productreviews from "./Productreviews";
@@ -13,6 +13,7 @@ function classNames(...classes) {
 
 const Productdetail = () => {
   const { productId } = useParams();
+  const navigate = useNavigate();
   const { isSignedIn, user } = useAuth();
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -172,6 +173,16 @@ const Productdetail = () => {
     <>
       <div className="bg-white">
         <div className="pt-6">
+          <div className="mx-auto max-w-2xl px-4 pb-4 sm:px-6 lg:max-w-7xl lg:px-8">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900"
+            >
+              <ArrowLeftIcon aria-hidden="true" className="size-4" />
+              Back
+            </button>
+          </div>
           <nav aria-label="Breadcrumb">
             <ol role="list" className="mx-auto flex max-w-2xl items-center space-x-2 px-4 sm:px-6 lg:max-w-7xl lg:px-8">
               <li>

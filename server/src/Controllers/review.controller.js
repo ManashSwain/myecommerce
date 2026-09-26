@@ -1,14 +1,16 @@
 import mongoose from "mongoose";
 import { Review } from "../Modals/review.modal.js"
 
-// CREATE REVIEW (create)
+// CREATE OR UPDATE REVIEW (post)
+// One review per user per product: first post creates (rating required),
+// later posts update the same review (rating optional — kept if omitted)
 export const createReview = async (req,res) => {
   try {
     const {userId,clerkId,userName,productId,rating,content}= req.body
-    if (!clerkId || !productId || !rating || !content) {
+    if (!clerkId || !productId || !content) {
       return res.status(400).json({
         success : false,
-        message : "clerkId, productId, rating and content are required",
+        message : "clerkId, productId and content are required",
       })
     }
     if (!mongoose.isValidObjectId(productId)) {
@@ -17,10 +19,31 @@ export const createReview = async (req,res) => {
         message : "Invalid product ID",
       })
     }
-    if (Number(rating) < 1 || Number(rating) > 5) {
+    if (rating !== undefined && (Number(rating) < 1 || Number(rating) > 5)) {
       return res.status(400).json({
         success : false,
         message : "Rating must be between 1 and 5",
+      })
+    }
+
+    const existingReview = await Review.findOne({ clerkId, productId });
+    if (existingReview) {
+      if (rating !== undefined) existingReview.rating = Number(rating);
+      existingReview.content = content;
+      if (userName) existingReview.userName = userName;
+      await existingReview.save();
+      return res.status(200).json({
+        success : true,
+        message : "Review updated successfully",
+        data : existingReview,
+      })
+    }
+
+    // First review from this user — rating is required
+    if (!rating) {
+      return res.status(400).json({
+        success : false,
+        message : "Rating is required for your first review",
       })
     }
     const createdReview = await Review.create({
@@ -71,27 +94,66 @@ export const getReview = async (req,res)=>{
    })
   }
 }
-// UPDATE REVIEW (patch)
+// UPDATE REVIEW (patch) — only the review's author may update it
 export const updateReview = async (req,res) => {
    try {
      const reviewId = req.params.reviewId;
-     const updatedReview = await Review.findOneAndUpdate({_id : reviewId}, req.body , {
-        new : true,
-        runValidators : true
-     })
+     const { clerkId, rating, content, userName } = req.body;
+     const review = await Review.findById(reviewId);
+     if (!review) {
+       return res.status(404).json({
+         success : false,
+         message : "Review not found",
+       })
+     }
+     if (review.clerkId !== clerkId) {
+       return res.status(403).json({
+         success : false,
+         message : "You can only update your own reviews",
+       })
+     }
+     if (rating !== undefined) {
+       if (Number(rating) < 1 || Number(rating) > 5) {
+         return res.status(400).json({
+           success : false,
+           message : "Rating must be between 1 and 5",
+         })
+       }
+       review.rating = Number(rating);
+     }
+     if (content) review.content = content;
+     if (userName) review.userName = userName;
+     const updatedReview = await review.save();
      return res.status(200).json({
         success : true,
         message : "Updated review successfully",
         data : updatedReview
      })
    }catch(err){
-    console.errror(err)
+    return res.status(500).json({
+      success : false,
+      message : err.message,
+    })
    }
 }
-// DELETE REVIEW (delete)
+// DELETE REVIEW (delete) — only the review's author may delete it
 export const deleteReview = async(req,res)=>{
   try {
    const reviewId = req.params.reviewId ;
+   const { clerkId } = req.body;
+   const review = await Review.findById(reviewId);
+   if (!review) {
+     return res.status(404).json({
+       success : false,
+       message : "Review not found",
+     })
+   }
+   if (review.clerkId !== clerkId) {
+     return res.status(403).json({
+       success : false,
+       message : "You can only delete your own reviews",
+     })
+   }
    const deletedReview = await Review.findOneAndDelete({_id:reviewId})
    return res.status(200).json({
     success : true,
@@ -99,6 +161,9 @@ export const deleteReview = async(req,res)=>{
     data : deletedReview
    })
   }catch(err){
-    console.error(err)
+    return res.status(500).json({
+      success : false,
+      message : err.message,
+    })
   }
 }
