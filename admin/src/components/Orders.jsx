@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDownIcon, UserCircleIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { toast } from "react-toastify";
 import { getAllOrders, updateOrderStatus } from "../utils/order";
 
@@ -30,6 +31,11 @@ const Orders = () => {
   const [openId, setOpenId] = useState(null);
   const [updatingId, setUpdatingId] = useState(null);
 
+  // Search + pagination
+  const [search, setSearch] = useState("");
+  const [pageSize, setPageSize] = useState(10);
+  const [page, setPage] = useState(1);
+
   const loadOrders = async () => {
     setLoading(true);
     try {
@@ -46,14 +52,31 @@ const Orders = () => {
     loadOrders();
   }, []);
 
-  // Apply the status filter locally so the counts stay accurate
-  const visibleOrders = useMemo(
-    () =>
-      filter === "all"
-        ? orders
-        : orders.filter((order) => order.status === filter),
-    [orders, filter]
-  );
+  // Apply the status filter + search locally so the counts stay accurate
+  const visibleOrders = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    return orders.filter((order) => {
+      if (filter !== "all" && order.status !== filter) return false;
+      if (!term) return true;
+      // Search by order number, customer name or contact email
+      const haystack = [
+        order.orderNumber,
+        order.shippingAddress?.fullName,
+        order.contactEmail,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(term);
+    });
+  }, [orders, filter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(visibleOrders.length / pageSize));
+  // Clamp during render so the page never points past the last page
+  // (e.g. after filtering narrows the result set).
+  const safePage = Math.min(page, totalPages);
+  const pageStart = (safePage - 1) * pageSize;
+  const paginatedOrders = visibleOrders.slice(pageStart, pageStart + pageSize);
 
   const counts = useMemo(() => {
     const base = { all: orders.length };
@@ -62,6 +85,12 @@ const Orders = () => {
     });
     return base;
   }, [orders]);
+
+  // Collapse any open accordion when the page changes
+  const goToPage = (next) => {
+    setPage(Math.min(Math.max(1, next), totalPages));
+    setOpenId(null);
+  };
 
   const handleStatusChange = async (orderId, status) => {
     const previous = orders;
@@ -99,7 +128,11 @@ const Orders = () => {
         {["all", ...STATUS_OPTIONS].map((status) => (
           <button
             key={status}
-            onClick={() => setFilter(status)}
+            onClick={() => {
+              setFilter(status);
+              setPage(1);
+              setOpenId(null);
+            }}
             className={`rounded-full border px-3 py-1.5 text-sm font-medium capitalize transition ${
               filter === status
                 ? "border-blue-600 bg-blue-600 text-white"
@@ -118,15 +151,61 @@ const Orders = () => {
         ))}
       </div>
 
+      {/* Search + records per page */}
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-xs">
+          <MagnifyingGlassIcon
+            aria-hidden="true"
+            className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+              setOpenId(null);
+            }}
+            placeholder="Search by order number, name or email"
+            className="block w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-10 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <label htmlFor="page-size">Rows per page</label>
+          <select
+            id="page-size"
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+              setOpenId(null);
+            }}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+          >
+            {[5, 10, 20, 50, 100].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {loading ? (
         <p className="mt-10 text-sm text-gray-500">Loading orders...</p>
       ) : visibleOrders.length === 0 ? (
         <div className="mt-10 rounded-lg border border-dashed border-gray-300 py-24 text-center">
-          <p className="text-sm text-gray-500">No orders found.</p>
+          <p className="text-sm text-gray-500">
+            {search.trim()
+              ? "No orders match your search."
+              : "No orders found."}
+          </p>
         </div>
       ) : (
-        <div className="mt-8 space-y-4">
-          {visibleOrders.map((order) => {
+        <>
+          <div className="mt-8 space-y-4">
+            {paginatedOrders.map((order) => {
             const isOpen = openId === order._id;
             return (
               <div
@@ -298,6 +377,88 @@ const Orders = () => {
             );
           })}
         </div>
+
+        {/* Pagination */}
+        <div className="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row">
+          <p className="text-sm text-gray-500">
+            Showing{" "}
+            <span className="font-medium text-gray-700">
+              {pageStart + 1}
+            </span>
+            –
+            <span className="font-medium text-gray-700">
+              {Math.min(pageStart + pageSize, visibleOrders.length)}
+            </span>{" "}
+            of{" "}
+            <span className="font-medium text-gray-700">
+              {visibleOrders.length}
+            </span>{" "}
+            order{visibleOrders.length === 1 ? "" : "s"}
+          </p>
+
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => goToPage(1)}
+              disabled={safePage === 1}
+              className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              «
+            </button>
+            <button
+              type="button"
+              onClick={() => goToPage(safePage - 1)}
+              disabled={safePage === 1}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Prev
+            </button>
+
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(
+                (p) =>
+                  p === 1 ||
+                  p === totalPages ||
+                  Math.abs(p - safePage) <= 1,
+              )
+              .map((p, index, arr) => (
+                <span key={p} className="flex items-center">
+                  {index > 0 && arr[index - 1] !== p - 1 && (
+                    <span className="px-1 text-sm text-gray-400">…</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => goToPage(p)}
+                    className={`min-w-9 rounded-md border px-2.5 py-1.5 text-sm font-medium ${
+                      p === safePage
+                        ? "border-blue-600 bg-blue-600 text-white"
+                        : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                </span>
+              ))}
+
+            <button
+              type="button"
+              onClick={() => goToPage(safePage + 1)}
+              disabled={safePage === totalPages}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+            <button
+              type="button"
+              onClick={() => goToPage(totalPages)}
+              disabled={safePage === totalPages}
+              className="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              »
+            </button>
+          </div>
+        </div>
+        </>
       )}
     </div>
   );

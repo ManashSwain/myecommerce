@@ -21,39 +21,39 @@ const menuItems = [
 
 const Sidebar = () => {
   return (
-    <div className="fixed">
-      <div className="flex h-screen max-h-screen">
-        {/* Sidebar */}
-        <div className="w-64 bg-white border-r border-gray-300 flex flex-col justify-between h-screen">
-          <div>
-            {/* Logo */}
-            <div className="p-4 text-blue-600 font-bold text-xl">~</div>
+    <div className="flex h-screen max-h-screen">
+      {/* Sidebar */}
+      <div className="w-64 shrink-0 bg-white border-r border-gray-300 flex flex-col justify-between h-screen">
+        <div>
+          {/* Logo */}
+          <div className="p-4 text-blue-600 font-bold text-xl">~</div>
 
-            {/* Menu */}
-            <div className="space-y-1 px-2">
-              {menuItems.map(({ name, path, icon: Icon, end }) => (
-                <NavLink
-                  key={name}
-                  to={path}
-                  end={end}
-                  className={({ isActive }) =>
-                    `flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer ${
-                      isActive
-                        ? "bg-gray-100 text-blue-600"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`
-                  }
-                >
-                  <Icon size={18} />
-                  <span className="text-sm font-medium">{name}</span>
-                </NavLink>
-              ))}
-            </div>
+          {/* Menu */}
+          <div className="space-y-1 px-2">
+            {menuItems.map(({ name, path, icon: Icon, end }) => (
+              <NavLink
+                key={name}
+                to={path}
+                end={end}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-2 rounded-lg cursor-pointer ${
+                    isActive
+                      ? "bg-gray-100 text-blue-600"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`
+                }
+              >
+                <Icon size={18} />
+                <span className="text-sm font-medium">{name}</span>
+              </NavLink>
+            ))}
           </div>
         </div>
+      </div>
 
-        {/* Main Content */}
-        <div className="flex-1 px-6 overflow-y-auto  h-screen max-h-scrren">
+      {/* Main Content */}
+      <div className="flex-1 min-w-0 h-screen overflow-y-auto">
+        <div className="px-6">
           <Outlet />
         </div>
       </div>
