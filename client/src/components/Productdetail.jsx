@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { StarIcon } from "@heroicons/react/20/solid";
-import { ArrowLeftIcon, HeartIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, HeartIcon, MinusIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import Productreviews from "./Productreviews";
 import { API_BASE_URL } from "../constants";
+import { getCart, updateCartQuantity, removeCartItem } from "../utils/cart";
 
 function classNames(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -21,6 +22,8 @@ const Productdetail = () => {
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
   const [adding, setAdding] = useState(false);
+  const [cart, setCart] = useState(null);
+  const [stepperBusy, setStepperBusy] = useState(false);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
 
   useEffect(() => {
@@ -54,6 +57,49 @@ const Productdetail = () => {
     };
     fetchProduct();
   }, [productId]);
+
+  useEffect(() => {
+    const loadCart = async () => {
+      if (!isSignedIn || !user?.id) {
+        setCart(null);
+        return;
+      }
+      setCart(await getCart(user.id));
+    };
+    loadCart();
+    window.addEventListener("cart-updated", loadCart);
+    return () => window.removeEventListener("cart-updated", loadCart);
+  }, [isSignedIn, user?.id]);
+
+  // Cart line for the currently selected variant (if already in the bag)
+  const cartLine = cart?.items?.find(
+    (item) =>
+      item.product?._id === productId &&
+      item.color === selectedColor &&
+      item.size === selectedSize
+  );
+  const selectedVariant = (product?.variants || []).find(
+    (v) => v.color === selectedColor && v.size === selectedSize
+  );
+
+  const changeQuantity = async (delta) => {
+    if (!cartLine || stepperBusy) return;
+    setStepperBusy(true);
+    try {
+      const next = cartLine.quantity + delta;
+      let updated;
+      if (next < 1) {
+        updated = await removeCartItem(user.id, cartLine);
+      } else {
+        updated = await updateCartQuantity(user.id, cartLine, next);
+      }
+      setCart(updated);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setStepperBusy(false);
+    }
+  };
 
   const handleColorChange = (color) => {
     setSelectedColor(color);
@@ -349,6 +395,35 @@ const Productdetail = () => {
                 )}
 
                 <div className="mt-10 flex gap-3">
+                  {cartLine ? (
+                    <div className="flex flex-1 items-center justify-between rounded-md border border-indigo-600 px-2 py-1.5">
+                      <button
+                        type="button"
+                        onClick={() => changeQuantity(-1)}
+                        disabled={stepperBusy}
+                        aria-label="Decrease quantity"
+                        className="rounded-md p-2 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+                      >
+                        <MinusIcon aria-hidden="true" className="size-5" />
+                      </button>
+                      <span className="text-base font-medium text-gray-900">
+                        {cartLine.quantity} in bag
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => changeQuantity(1)}
+                        disabled={
+                          stepperBusy ||
+                          (selectedVariant?.stock !== undefined &&
+                            cartLine.quantity >= selectedVariant.stock)
+                        }
+                        aria-label="Increase quantity"
+                        className="rounded-md p-2 text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+                      >
+                        <PlusIcon aria-hidden="true" className="size-5" />
+                      </button>
+                    </div>
+                  ) : (
                   <button
                     type="submit"
                     disabled={adding}
@@ -356,6 +431,7 @@ const Productdetail = () => {
                   >
                     {adding ? "Adding..." : "Add to bag"}
                   </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleAddToWishlist}

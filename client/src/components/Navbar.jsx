@@ -30,6 +30,8 @@ import useAuth from "../customhooks/useAuth";
 import { Link } from "react-router";
 import { toast } from "react-toastify";
 import { API_BASE_URL } from "../constants";
+import { updateCartQuantity, removeCartItem } from "../utils/cart";
+import { MinusIcon, PlusIcon } from "@heroicons/react/24/outline";
 import Searchmodal from "./Searchmodal";
 
 const Navbar = () => {
@@ -88,6 +90,19 @@ const Navbar = () => {
       }
       setCart(json.data);
       window.dispatchEvent(new Event("cart-updated"));
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleQuantityChange = async (item, delta) => {
+    try {
+      const next = item.quantity + delta;
+      const updated =
+        next < 1
+          ? await removeCartItem(user.id, item)
+          : await updateCartQuantity(user.id, item, next);
+      setCart(updated);
     } catch (err) {
       toast.error(err.message);
     }
@@ -334,9 +349,30 @@ const Navbar = () => {
                                     </p>
                                   </div>
                                   <div className="flex flex-1 items-end justify-between text-sm">
-                                    <p className="text-gray-500">
-                                      Qty {item.quantity}
-                                    </p>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuantityChange(item, -1)}
+                                        aria-label="Decrease quantity"
+                                        className="rounded-md border border-gray-300 p-1 text-gray-600 hover:bg-gray-100"
+                                      >
+                                        <MinusIcon aria-hidden="true" className="size-4" />
+                                      </button>
+                                      <span className="text-gray-700">{item.quantity}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuantityChange(item, 1)}
+                                        disabled={
+                                          (item.product.variants || []).find(
+                                            (v) => v.color === item.color && v.size === item.size
+                                          )?.stock <= item.quantity
+                                        }
+                                        aria-label="Increase quantity"
+                                        className="rounded-md border border-gray-300 p-1 text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+                                      >
+                                        <PlusIcon aria-hidden="true" className="size-4" />
+                                      </button>
+                                    </div>
 
                                     <div className="flex">
                                       <button
