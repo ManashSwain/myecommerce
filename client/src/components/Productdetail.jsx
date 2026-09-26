@@ -156,6 +156,35 @@ const Productdetail = () => {
     }
   };
 
+  // Buy now — jump straight to checkout with this single item.
+  // The cart is left untouched; checkout reads the item from route state.
+  const handleBuyNow = () => {
+    if (!isSignedIn) {
+      setFeedback({
+        type: "error",
+        message: "Please sign in to buy this item.",
+      });
+      return;
+    }
+    if (!selectedColor || !selectedSize) {
+      setFeedback({ type: "error", message: "Please select a color and size." });
+      return;
+    }
+    navigate("/checkout", {
+      state: {
+        buyNow: {
+          productId,
+          title: product.title,
+          price: product.price,
+          image: product.images?.[0] || "",
+          color: selectedColor,
+          size: selectedSize,
+          quantity: 1,
+        },
+      },
+    });
+  };
+
   const handleAddToWishlist = async () => {
     if (!isSignedIn) {
       toast.error("Please sign in to save items to your wishlist.");
@@ -492,6 +521,16 @@ const Productdetail = () => {
                     <HeartIcon aria-hidden="true" className="size-6" />
                   </button>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleBuyNow}
+                  disabled={!selectedColor || !selectedSize}
+                  className="mt-3 flex w-full items-center justify-center rounded-md border border-indigo-600 bg-white px-8 py-3 text-base font-medium text-indigo-600 hover:bg-indigo-50 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Buy now
+                </button>
+
                 {feedback.message && (
                   <p
                     className={classNames(

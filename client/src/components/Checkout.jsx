@@ -2,7 +2,7 @@
 
 
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { CheckCircleIcon, TrashIcon } from "@heroicons/react/20/solid";
 import { MapPinIcon, PlusIcon } from "@heroicons/react/24/outline";
@@ -10,7 +10,7 @@ import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import { API_BASE_URL } from "../constants";
 import { getCart, removeCartItem, updateCartQuantity } from "../utils/cart";
-import { createOrder } from "../utils/order";
+import { createOrder, createDirectOrder } from "../utils/order";
 
 
 
@@ -51,6 +51,11 @@ const chipLabel = (type) =>
 const Checkout = () => {
   const { isSignedIn, isLoaded, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // "Buy now" passes a single item via route state. When present, checkout
+  // operates on that item only and never touches the user's cart.
+  const buyNow = location.state?.buyNow || null;
 
   const [cart, setCart] = useState(null);
   const [addresses, setAddresses] = useState([]);
@@ -78,6 +83,26 @@ const Checkout = () => {
   });
 
   const cartItems = (cart?.items || []).filter((item) => item.product?._id);
+
+  // Lines to display + order. In "buy now" mode this is the single item the
+  // user chose; otherwise it's the regular cart.
+  const orderItems = buyNow
+    ? [
+        {
+          product: {
+            _id: buyNow.productId,
+            title: buyNow.title,
+            price: buyNow.price,
+            images: buyNow.image ? [buyNow.image] : [],
+            variants: [],
+          },
+          productId: buyNow.productId,
+          color: buyNow.color,
+          size: buyNow.size,
+          quantity: buyNow.quantity || 1,
+        },
+      ]
+    : cartItems;
 
   // Prefill the signed-in user's email (email is required to place an order)
   useEffect(() => {
@@ -165,8 +190,11 @@ const Checkout = () => {
     [deliveryMethodId],
   );
 
-  const subtotal = cart?.subtotal || 0;
-  const shipping = cartItems.length ? selectedDelivery.price : 0;
+  const subtotal =
+    buyNow
+      ? buyNow.price * (buyNow.quantity || 1)
+      : cart?.subtotal || 0;
+  const shipping = orderItems.length ? selectedDelivery.price : 0;
   const taxes = subtotal * TAX_RATE;
   const total = subtotal + shipping + taxes;
 
@@ -180,7 +208,12 @@ const Checkout = () => {
       toast.error("Please enter a valid email address to place your order.");
       return;
     }
-    if (!cartItems.length) {
+    if (buyNow) {
+      if (!orderItems.length) {
+        toast.error("No item to order.");
+        return;
+      }
+    } else if (!cartItems.length) {
       toast.error("Your cart is empty.");
       return;
     }
@@ -204,13 +237,32 @@ const Checkout = () => {
 
     setPlacingOrder(true);
     try {
-      await createOrder({
-        userId: user.id,
-        contactEmail: form.email,
-        shippingAddress,
-        deliveryMethod: selectedDelivery.title,
-        shipping,
-      });
+      if (buyNow) {
+        // Direct order — cart is left untouched
+        await createDirectOrder({
+          userId: user.id,
+          contactEmail: form.email,
+          shippingAddress,
+          deliveryMethod: selectedDelivery.title,
+          shipping,
+          items: [
+            {
+              productId: buyNow.productId,
+              color: buyNow.color,
+              size: buyNow.size,
+              quantity: buyNow.quantity || 1,
+            },
+          ],
+        });
+      } else {
+        await createOrder({
+          userId: user.id,
+          contactEmail: form.email,
+          shippingAddress,
+          deliveryMethod: selectedDelivery.title,
+          shipping,
+        });
+      }
       toast.success("Order placed successfully!");
       navigate("/orders");
     } catch (err) {
@@ -677,17 +729,17 @@ const Checkout = () => {
 
 
 
-              {loading ? (
+              {loading && !buyNow ? (
                 <p className="px-4 py-10 text-sm text-gray-500 sm:px-6">
                   Loading your cart...
                 </p>
-              ) : cartItems.length === 0 ? (
+              ) : orderItems.length === 0 ? (
                 <p className="px-4 py-10 text-sm text-gray-500 sm:px-6">
                   Your cart is empty. Add some products before checking out.
                 </p>
               ) : (
                 <ul role="list" className="divide-y divide-gray-200">
-                  {cartItems.map((item) => {
+                  {orderItems.map((item) => {
                     const product = item.product;
                     const lineId = `${product._id}-${item.color}-${item.size}`;
                     const maxStock =
@@ -738,17 +790,19 @@ const Checkout = () => {
 
 
                             <div className="ml-4 flow-root shrink-0">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItem(item)}
-                                className="-m-2.5 flex items-center justify-center bg-white p-2.5 text-gray-400 hover:text-gray-500"
-                              >
-                                <span className="sr-only">Remove</span>
-                                <TrashIcon
-                                  aria-hidden="true"
-                                  className="size-5"
-                                />
-                              </button>
+                              {!buyNow && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveItem(item)}
+                                  className="-m-2.5 flex items-center justify-center bg-white p-2.5 text-gray-400 hover:text-gray-500"
+                                >
+                                  <span className="sr-only">Remove</span>
+                                  <TrashIcon
+                                    aria-hidden="true"
+                                    className="size-5"
+                                  />
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -779,32 +833,38 @@ const Checkout = () => {
                             </p>
 
                             <div className="ml-4">
-                              <div className="grid grid-cols-1">
-                                <select
-                                  value={item.quantity}
-                                  onChange={(e) =>
-                                    handleQuantityChange(
-                                      item,
-                                      Number(e.target.value),
-                                    )
-                                  }
-                                  aria-label="Quantity"
-                                  className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-2 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
-                                >
-                                  {Array.from(
-                                    { length: Math.max(maxStock, 1) },
-                                    (_, i) => i + 1,
-                                  ).map((n) => (
-                                    <option key={n} value={n}>
-                                      {n}
-                                    </option>
-                                  ))}
-                                </select>
-                                <ChevronDownIcon
-                                  aria-hidden="true"
-                                  className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
-                                />
-                              </div>
+                              {buyNow ? (
+                                <p className="text-sm text-gray-500">
+                                  Qty {item.quantity}
+                                </p>
+                              ) : (
+                                <div className="grid grid-cols-1">
+                                  <select
+                                    value={item.quantity}
+                                    onChange={(e) =>
+                                      handleQuantityChange(
+                                        item,
+                                        Number(e.target.value),
+                                      )
+                                    }
+                                    aria-label="Quantity"
+                                    className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-2 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 sm:text-sm/6"
+                                  >
+                                    {Array.from(
+                                      { length: Math.max(maxStock, 1) },
+                                      (_, i) => i + 1,
+                                    ).map((n) => (
+                                      <option key={n} value={n}>
+                                        {n}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <ChevronDownIcon
+                                    aria-hidden="true"
+                                    className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end text-gray-500 sm:size-4"
+                                  />
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -854,7 +914,7 @@ const Checkout = () => {
                 <button
                   type="submit"
 
-                  disabled={placingOrder || !isEmailValid || !cartItems.length}
+                  disabled={placingOrder || !isEmailValid || !orderItems.length}
                   className="w-full rounded-md border border-transparent bg-indigo-600 px-4 py-3 text-base font-medium text-white shadow-xs hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-50 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
                 >
 

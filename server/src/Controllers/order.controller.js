@@ -140,6 +140,143 @@ export const createOrder = async (req, res) => {
   }
 };
 
+// CREATE DIRECT ORDER (post) — "Buy now".
+// Accepts explicit line items ({ productId, color, size, quantity }) so a
+// single product can be ordered straight from its page. The cart is NOT read
+// and NOT modified — this path is fully independent of the shopping bag.
+export const createDirectOrder = async (req, res) => {
+  try {
+    const {
+      userId,
+      contactEmail,
+      shippingAddress,
+      deliveryMethod = "Standard",
+      shipping = 0,
+      items: rawItems,
+    } = req.body;
+
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "userId is required" });
+    }
+    if (!contactEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "A valid contact email is required" });
+    }
+    if (
+      !shippingAddress ||
+      !shippingAddress.fullName ||
+      !shippingAddress.addressLine1 ||
+      !shippingAddress.city ||
+      !shippingAddress.pincode
+    ) {
+      return res
+        .status(400)
+        .json({ success: false, message: "A complete shipping address is required" });
+    }
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "At least one item is required" });
+    }
+
+    // Load the products referenced by the requested items
+    const productIds = rawItems.map((item) => item.productId);
+    if (productIds.some((id) => !mongoose.isValidObjectId(id))) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid product ID" });
+    }
+    const products = await Product.find({ _id: { $in: productIds } });
+    const productById = new Map(
+      products.map((product) => [product._id.toString(), product])
+    );
+
+    const items = [];
+    for (const item of rawItems) {
+      const product = productById.get(String(item.productId));
+      const quantity = Number(item.quantity) || 1;
+      if (!product) {
+        return res
+          .status(404)
+          .json({ success: false, message: "A product in your order was not found" });
+      }
+      if (quantity < 1) {
+        return res
+          .status(400)
+          .json({ success: false, message: "quantity must be at least 1" });
+      }
+      const variant = (product.variants || []).find(
+        (v) => v.color === item.color && v.size === item.size
+      );
+      const available = variant ? variant.stock : 0;
+      if (available < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `"${product.title}" (${item.color} / ${item.size}) only has ${available} left in stock.`,
+        });
+      }
+      items.push({
+        product: product._id,
+        title: product.title,
+        price: product.price,
+        image: product.images?.[0] || "",
+        quantity,
+        color: item.color,
+        size: item.size,
+      });
+    }
+
+    const subtotal = items.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    );
+    const taxes = Number((subtotal * TAX_RATE).toFixed(2));
+    const shippingCost = Number(shipping) || 0;
+    const total = Number((subtotal + shippingCost + taxes).toFixed(2));
+
+    const order = await Order.create({
+      userId,
+      orderNumber: generateOrderNumber(),
+      contactEmail,
+      items,
+      shippingAddress,
+      deliveryMethod,
+      subtotal,
+      shipping: shippingCost,
+      taxes,
+      total,
+      status: "placed",
+    });
+
+    // Reduce stock for the ordered variants now that the order is placed
+    await Promise.all(
+      items.map((item) =>
+        Product.updateOne(
+          { _id: item.product, "variants.color": item.color, "variants.size": item.size },
+          { $inc: { "variants.$.stock": -item.quantity } }
+        )
+      )
+    );
+
+    // NOTE: the user's cart is intentionally left untouched.
+
+    return res.status(201).json({
+      success: true,
+      message: "Order placed successfully",
+      data: order,
+    });
+  } catch (err) {
+    console.error("createDirectOrder error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 // GET ORDERS FOR A USER (get) — newest first
 export const getOrders = async (req, res) => {
   try {

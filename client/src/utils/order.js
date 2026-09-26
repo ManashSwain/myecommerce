@@ -17,6 +17,21 @@ export const createOrder = async (payload) => {
   return json.data;
 };
 
+// "Buy now" — place an order for explicit items without touching the cart.
+// Unlike createOrder, the cart is left completely unaffected.
+export const createDirectOrder = async (payload) => {
+  const res = await fetch(`${API_BASE_URL}/api/order/createdirectorder`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json();
+  if (!res.ok || json.success === false) {
+    throw new Error(json.message || "Could not place your order");
+  }
+  return json.data;
+};
+
 export const getOrders = async (userId) => {
   try {
     const res = await fetch(`${API_BASE_URL}/api/order/getorders/${userId}`);
