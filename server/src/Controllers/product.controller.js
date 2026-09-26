@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Product } from "../Modals/product.modal.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 
@@ -72,6 +73,38 @@ export const getProduct = async (req, res) => {
       success: true,
       message: "Fetched all products successfully",
       data: allProducts,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// GET SINGLE PRODUCT BY ID (get)
+export const getProductById = async (req, res) => {
+  try {
+    const productId = req.params.productId;
+    if (!mongoose.isValidObjectId(productId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid product ID",
+      });
+    }
+    const product = await Product.findById(productId).populate(
+      "category subcategory",
+    );
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Fetched product successfully",
+      data: product,
     });
   } catch (err) {
     return res.status(500).json({
