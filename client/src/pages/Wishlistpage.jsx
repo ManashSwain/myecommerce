@@ -79,6 +79,7 @@ const Wishlistpage = () => {
         throw new Error(json.message || "Could not add to bag");
       }
       toast.success("Added to bag!");
+      window.dispatchEvent(new Event("cart-updated"));
     } catch (err) {
       toast.error(err.message);
     }

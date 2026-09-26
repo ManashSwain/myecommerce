@@ -133,6 +133,7 @@ const Shoppage = () => {
         throw new Error(json.message || "Could not add to bag");
       }
       toast.success("Added to bag!");
+      window.dispatchEvent(new Event("cart-updated"));
     } catch (err) {
       toast.error(err.message);
     }
@@ -350,7 +351,7 @@ const Shoppage = () => {
                         onClick={() => handleAddToCart(product)}
                         className="mt-3 w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700"
                       >
-                        Add to Cart
+                        Add to bag
                       </button>
                     </div>
                   ))}
