@@ -20,6 +20,7 @@ import productrouter from "./src/Routes/product.route.js"
 import reviewrouter from "./src/Routes/review.route.js"
 import addressrouter from "./src/Routes/address.route.js"
 import cartrouter from "./src/Routes/cart.route.js"
+import orderrouter from "./src/Routes/order.route.js"
 import newsletterrouter from "./src/Routes/newsletter.route.js"
 import wishlistRouter from "./src/Routes/wishlist.route.js";
 
@@ -50,6 +51,8 @@ app.use("/api/reviews",reviewrouter)
 app.use("/api/address",addressrouter)
 // cart middleware
 app.use("/api/cart",cartrouter)
+// order middleware
+app.use("/api/order",orderrouter)
 // newsletter middleware
 app.use("/api/newsletter",newsletterrouter);
 // wishlist middleware
@@ -82,3 +85,5 @@ connectDb();
 app.listen(PORT, () => {
   console.log(`App is listening on port ${PORT}`);
 });
+
+

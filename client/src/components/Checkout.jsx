@@ -10,6 +10,7 @@ import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import { API_BASE_URL } from "../constants";
 import { getCart, removeCartItem, updateCartQuantity } from "../utils/cart";
+import { createOrder } from "../utils/order";
 
 
 
@@ -183,12 +184,40 @@ const Checkout = () => {
       toast.error("Your cart is empty.");
       return;
     }
+
+    // Build the shipping address snapshot from the form fields
+    const shippingAddress = {
+      fullName: `${form.firstName} ${form.lastName}`.trim(),
+      phone: form.phone,
+      addressLine1: form.address,
+      addressLine2: form.apartment,
+      country: form.country,
+      state: form.region,
+      district: form.city,
+      city: form.city,
+      pincode: form.postalCode,
+      landmark: form.company,
+      addressType:
+        addresses.find((a) => a._id === selectedAddressId)?.addressType ||
+        "home",
+    };
+
     setPlacingOrder(true);
-    // Order persistence isn't wired to a backend endpoint yet; surface a
-    // confirmation and send the shopper to their orders page.
-    toast.success("Order placed successfully!");
-    setPlacingOrder(false);
-    navigate("/orders");
+    try {
+      await createOrder({
+        userId: user.id,
+        contactEmail: form.email,
+        shippingAddress,
+        deliveryMethod: selectedDelivery.title,
+        shipping,
+      });
+      toast.success("Order placed successfully!");
+      navigate("/orders");
+    } catch (err) {
+      toast.error(err.message || "Could not place your order");
+    } finally {
+      setPlacingOrder(false);
+    }
   };
 
   if (!isLoaded) return null;
