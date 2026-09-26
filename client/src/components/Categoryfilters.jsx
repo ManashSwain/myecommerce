@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import {
   Dialog,
   DialogBackdrop,
@@ -8,7 +8,7 @@ import {
   DisclosureButton,
   DisclosurePanel,
 } from "@headlessui/react";
-import { XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { FunnelIcon, MinusIcon, PlusIcon } from "@heroicons/react/20/solid";
 import { toast } from "react-toastify";
 import { API_BASE_URL } from "../constants";
@@ -30,6 +30,7 @@ const totalStock = (product) =>
 
 const Categoryfilters = () => {
   const { categoryname } = useParams();
+  const navigate = useNavigate();
 
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -278,7 +279,17 @@ const Categoryfilters = () => {
         </Dialog>
 
         <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-baseline justify-between border-b border-gray-200 pt-24 pb-6">
+          <div className="pt-6">
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              className="inline-flex items-center gap-2 text-sm font-medium text-gray-500 hover:text-gray-900"
+            >
+              <ArrowLeftIcon aria-hidden="true" className="size-4" />
+              Back
+            </button>
+          </div>
+          <div className="flex items-baseline justify-between border-b border-gray-200 pt-6 pb-6">
             <h1 className="text-4xl font-bold tracking-tight text-gray-900">
               {categoryTitle}
             </h1>
