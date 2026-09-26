@@ -382,8 +382,23 @@ const Productdetail = () => {
                       <button
                         type="button"
                         onClick={() => setSizeChartOpen(true)}
-                        className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                        className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 underline underline-offset-2 hover:text-indigo-500"
                       >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={1.6}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                          className="size-4"
+                        >
+                          {/* Shirt / t-shirt outline */}
+                          <path d="M9 3.5 5 5.5 3 8.5l2.5 1.5L6.5 20h11l1-10L21 8.5 19 5.5l-4-2" />
+                          <path d="M9 3.5a3 3 0 0 0 6 0" />
+                        </svg>
                         Size chart
                       </button>
                     </div>
