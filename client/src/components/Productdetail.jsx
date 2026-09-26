@@ -144,6 +144,9 @@ const Productdetail = () => {
         throw new Error(json.message || "Could not add to bag");
       }
       setFeedback({ type: "success", message: "Added to bag!" });
+      // Response already contains the updated, populated cart
+      setCart(json.data);
+      window.dispatchEvent(new Event("cart-updated"));
     } catch (err) {
       setFeedback({ type: "error", message: err.message });
     } finally {
