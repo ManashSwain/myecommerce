@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { StarIcon } from "@heroicons/react/20/solid";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "react-toastify";
 import FormModal from "./FormModal";
 import ConfirmModal from "./ConfirmModal";
@@ -17,6 +17,7 @@ const emptyForm = {
   slug: "",
   rating: 0,
   variants: [],
+  existingImages: [],
   isFeatured: false,
 };
 
@@ -148,6 +149,21 @@ const Products = () => {
     }));
   };
 
+  const removeExistingImage = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      existingImages: prev.existingImages.filter((_, i) => i !== index),
+    }));
+  };
+
+  const removeNewImage = (index) => {
+    setForm((prev) => ({
+      ...prev,
+      images: prev.images.filter((_, i) => i !== index),
+      previews: prev.previews.filter((_, i) => i !== index),
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
@@ -164,6 +180,9 @@ const Products = () => {
     formData.append("slug", form.slug);
     formData.append("rating", form.rating);
     formData.append("variants", JSON.stringify(form.variants));
+    if (editingId) {
+      formData.append("existingImages", JSON.stringify(form.existingImages));
+    }
     formData.append("isFeatured", form.isFeatured);
     form.images.forEach((file) => formData.append("images", file));
 
@@ -206,7 +225,8 @@ const Products = () => {
       category: product.category?._id || product.category || "",
       subcategory: product.subcategory?._id || product.subcategory || "",
       images: [],
-      previews: product.images || [],
+      previews: [],
+      existingImages: product.images || [],
       slug: product.slug,
       rating: product.rating,
       variants: (product.variants || []).map((variant) => ({
@@ -477,15 +497,41 @@ const Products = () => {
                   onChange={handleImagesChange}
                   className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:rounded-md file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-blue-600 hover:file:bg-blue-100"
                 />
-                {form.previews.length > 0 && (
+                {(form.existingImages.length > 0 || form.previews.length > 0) && (
                   <div className="mt-2 flex flex-wrap gap-2">
+                    {form.existingImages.map((src, index) => (
+                      <div key={`existing-${index}`} className="relative">
+                        <img
+                          src={src}
+                          alt={`Current ${index + 1}`}
+                          className="h-20 w-20 rounded-md object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeExistingImage(index)}
+                          aria-label="Remove image"
+                          className="absolute -top-2 -right-2 rounded-full bg-red-600 p-0.5 text-white hover:bg-red-700"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
                     {form.previews.map((src, index) => (
-                      <img
-                        key={index}
-                        src={src}
-                        alt={`Preview ${index + 1}`}
-                        className="h-20 w-20 rounded-md object-cover"
-                      />
+                      <div key={`new-${index}`} className="relative">
+                        <img
+                          src={src}
+                          alt={`New ${index + 1}`}
+                          className="h-20 w-20 rounded-md object-cover ring-2 ring-blue-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeNewImage(index)}
+                          aria-label="Remove image"
+                          className="absolute -top-2 -right-2 rounded-full bg-red-600 p-0.5 text-white hover:bg-red-700"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}

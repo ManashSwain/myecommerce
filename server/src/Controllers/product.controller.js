@@ -2,6 +2,17 @@ import mongoose from "mongoose";
 import { Product } from "../Modals/product.modal.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
 
+// String arrays (e.g. existingImages) arrive as JSON strings too
+const parseStringArray = (raw) => {
+  if (raw === undefined) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : null;
+  } catch {
+    return null;
+  }
+};
+
 // Variants arrive as a JSON string in multipart form data
 const parseVariants = (raw) => {
   if (!raw) return [];
@@ -136,14 +147,30 @@ export const updateProduct = async (req, res) => {
       variants: variants,
       isFeatured: req.body.isFeatured === "true",
     };
-    // Only replace images when new files are uploaded
+    const existingImages = parseStringArray(req.body.existingImages);
+    if (existingImages === null) {
+      return res.status(400).json({
+        success: false,
+        message: "existingImages must be a valid JSON array",
+      });
+    }
+    // Upload any new files
+    const newImageUrls = [];
     if (req.files && req.files.length > 0) {
       const results = await Promise.all(
         req.files.map((file) =>
           uploadToCloudinary(file.buffer, "ecommerce/products"),
         ),
       );
-      updates.images = results.map((result) => result.secure_url);
+      results.forEach((result) => newImageUrls.push(result.secure_url));
+    }
+    // When the client sends existingImages, it is the source of truth for
+    // which previously-uploaded images to keep; new uploads are appended.
+    // Without it, new uploads replace the set (legacy behavior).
+    if (existingImages !== undefined) {
+      updates.images = [...existingImages, ...newImageUrls];
+    } else if (newImageUrls.length > 0) {
+      updates.images = newImageUrls;
     }
     const updatedProduct = await Product.findOneAndUpdate(
       { _id: productId },
