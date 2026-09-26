@@ -8,6 +8,9 @@ function classNames(...classes) {
   return classes.filter(Boolean).join(" ");
 }
 
+// Ordered tracking steps — index matches the statusStep() value below.
+const STEPS = ["Order placed", "Processing", "Shipped", "Delivered"];
+
 // Map an order status to the progress bar step (0-3)
 const statusStep = (status) => {
   switch (status) {
@@ -195,27 +198,37 @@ const Orders = () => {
                       {statusLabel(order.status)}
                     </p>
                     <div aria-hidden="true" className="mt-6">
-                      <div className="overflow-hidden rounded-full bg-gray-200">
-                        <div
-                          style={{
-                            width: `calc((${step} * 2 + 1) / 8 * 100%)`,
-                          }}
-                          className="h-2 rounded-full bg-indigo-600"
-                        />
+                      {/*
+                        The track and its 4 labels share the same 4 anchor
+                        points (0%, 33.3%, 66.6%, 100%) so the fill always ends
+                        exactly under the active label. `justify-between` puts
+                        the first label at the left edge and the last at the
+                        right edge, matching the fill's start/end.
+                      */}
+                      <div className="relative">
+                        <div className="overflow-hidden rounded-full bg-gray-200">
+                          <div
+                            style={{ width: `${(step / (STEPS.length - 1)) * 100}%` }}
+                            className="h-2 rounded-full bg-indigo-600 transition-all duration-300"
+                          />
+                        </div>
                       </div>
-                      <div className="mt-6 hidden grid-cols-4 text-sm font-medium text-gray-600 sm:grid">
-                        <div className={classNames(step >= 0 ? "text-indigo-600" : "")}>
-                          Order placed
-                        </div>
-                        <div className={classNames(step > 0 ? "text-indigo-600" : "", "text-center")}>
-                          Processing
-                        </div>
-                        <div className={classNames(step > 1 ? "text-indigo-600" : "", "text-center")}>
-                          Shipped
-                        </div>
-                        <div className={classNames(step > 2 ? "text-indigo-600" : "", "text-right")}>
-                          Delivered
-                        </div>
+                      <div className="mt-6 hidden text-sm font-medium text-gray-600 sm:flex sm:justify-between">
+                        {STEPS.map((label, index) => (
+                          <div
+                            key={label}
+                            className={classNames(
+                              step >= index ? "text-indigo-600" : "",
+                              index === 0
+                                ? "text-left"
+                                : index === STEPS.length - 1
+                                  ? "text-right"
+                                  : "text-center",
+                            )}
+                          >
+                            {label}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>
