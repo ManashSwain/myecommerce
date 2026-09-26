@@ -397,7 +397,27 @@ const Productdetail = () => {
                   </div>
                 )}
 
-                <div className="mt-10 flex gap-3">
+                {/* Stock indicator for the selected variant */}
+                {selectedVariant && (
+                  <p
+                    className={classNames(
+                      "mt-6 text-sm font-medium",
+                      selectedVariant.stock === 0
+                        ? "text-red-600"
+                        : selectedVariant.stock < 5
+                          ? "text-red-600"
+                          : "text-green-600"
+                    )}
+                  >
+                    {selectedVariant.stock === 0
+                      ? "Out of stock"
+                      : selectedVariant.stock < 5
+                        ? `Hurry! Only ${selectedVariant.stock} left in stock!`
+                        : `In stock (${selectedVariant.stock} available)`}
+                  </p>
+                )}
+
+                <div className="mt-6 flex gap-3">
                   {cartLine ? (
                     <div className="flex flex-1 items-center justify-between rounded-md border border-indigo-600 px-2 py-1.5">
                       <button
