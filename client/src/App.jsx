@@ -16,6 +16,7 @@ import Wishlistpage from "./pages/Wishlistpage";
 import Savedaddressespage from "./pages/Savedaddressespage";
 import Toast from "./components/Toast";
 import Shoppage from "./pages/Shoppage";
+import Featuredproducts from "./pages/Featuredproducts";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
           </Route>
           <Route path="product/:productId" element={<Productdetail />} />
           <Route path="shop" element={<Shoppage/>}/>
+          <Route path="featured-products" element={<Featuredproducts/>}/>
           <Route path="orders" element={<Orderpage/>}/>
           <Route path="wishlist" element={<Wishlistpage/>}/>
           <Route path="addresses" element={<Savedaddressespage/>}/>
@@ -47,3 +49,4 @@ function App() {
 }
 
 export default App;
+
