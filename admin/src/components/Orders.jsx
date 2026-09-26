@@ -1,209 +1,306 @@
-import React from 'react'
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDownIcon, UserCircleIcon } from "@heroicons/react/24/outline";
+import { toast } from "react-toastify";
+import { getAllOrders, updateOrderStatus } from "../utils/order";
+
+const STATUS_OPTIONS = ["placed", "processing", "shipped", "delivered"];
+
+// Colours for the status pill
+const statusStyles = {
+  placed: "bg-gray-100 text-gray-700",
+  processing: "bg-amber-100 text-amber-700",
+  shipped: "bg-blue-100 text-blue-700",
+  delivered: "bg-green-100 text-green-700",
+};
+
+const statusLabel = (status) =>
+  status ? status.charAt(0).toUpperCase() + status.slice(1) : "Placed";
+
+const formatDate = (value) =>
+  new Date(value).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 
 const Orders = () => {
-    const products = [
-  {
-    id: 1,
-    name: 'Nomad Tumbler',
-    description:
-      'This durable and portable insulated tumbler will keep your beverage at the perfect temperature during your next adventure.',
-    href: '#',
-    price: '35.00',
-    status: 'Preparing to ship',
-    step: 1,
-    date: 'March 24, 2021',
-    datetime: '2021-03-24',
-    address: ['Floyd Miles', '7363 Cynthia Pass', 'Toronto, ON N3Y 4H8'],
-    email: 'f•••@example.com',
-    phone: '1•••••••••40',
-    imageSrc: 'https://tailwindcss.com/plus-assets/img/ecommerce-images/confirmation-page-03-product-01.jpg',
-    imageAlt: 'Insulated bottle with white base and black snap lid.',
-  },
-  {
-    id: 2,
-    name: 'Minimalist Wristwatch',
-    description: 'This contemporary wristwatch has a clean, minimalist look and high quality components.',
-    href: '#',
-    price: '149.00',
-    status: 'Shipped',
-    step: 0,
-    date: 'March 23, 2021',
-    datetime: '2021-03-23',
-    address: ['Floyd Miles', '7363 Cynthia Pass', 'Toronto, ON N3Y 4H8'],
-    email: 'f•••@example.com',
-    phone: '1•••••••••40',
-    imageSrc: 'https://tailwindcss.com/plus-assets/img/ecommerce-images/confirmation-page-03-product-02.jpg',
-    imageAlt:
-      'Arm modeling wristwatch with black leather band, white watch face, thin watch hands, and fine time markings.',
-  },
-]
-function classNames(...classes) {
-  return classes.filter(Boolean).join(' ')
-}
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all");
+  const [openId, setOpenId] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
+
+  const loadOrders = async () => {
+    setLoading(true);
+    try {
+      const data = await getAllOrders();
+      setOrders(data);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOrders();
+  }, []);
+
+  // Apply the status filter locally so the counts stay accurate
+  const visibleOrders = useMemo(
+    () =>
+      filter === "all"
+        ? orders
+        : orders.filter((order) => order.status === filter),
+    [orders, filter]
+  );
+
+  const counts = useMemo(() => {
+    const base = { all: orders.length };
+    STATUS_OPTIONS.forEach((status) => {
+      base[status] = orders.filter((o) => o.status === status).length;
+    });
+    return base;
+  }, [orders]);
+
+  const handleStatusChange = async (orderId, status) => {
+    const previous = orders;
+    // Optimistic update
+    setOrders((prev) =>
+      prev.map((o) => (o._id === orderId ? { ...o, status } : o))
+    );
+    setUpdatingId(orderId);
+    try {
+      await updateOrderStatus(orderId, status);
+      toast.success(`Order marked as ${status}`);
+    } catch (err) {
+      setOrders(previous); // rollback
+      toast.error(err.message);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   return (
-    <div >
-      <div className="mx-auto max-w-2xl pt-16 sm:px-6 sm:py-24 lg:max-w-7xl lg:px-8">
-        <div className="space-y-2 px-4 sm:flex sm:items-baseline sm:justify-between sm:space-y-0 sm:px-0">
-          <div className="flex sm:items-baseline sm:space-x-4">
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">Order #54879</h1>
-            <a href="#" className="hidden text-sm font-medium text-indigo-600 hover:text-indigo-500 sm:block">
-              View invoice
-              <span aria-hidden="true"> &rarr;</span>
-            </a>
-          </div>
-          <p className="text-sm text-gray-600">
-            Order placed{' '}
-            <time dateTime="2021-03-22" className="font-medium text-gray-900">
-              March 22, 2021
-            </time>
+    <div className="py-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+            Orders
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {orders.length} order{orders.length === 1 ? "" : "s"} placed
           </p>
-          <a href="#" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 sm:hidden">
-            View invoice
-            <span aria-hidden="true"> &rarr;</span>
-          </a>
-        </div>
-
-        {/* Products */}
-        <div className="mt-6">
-          <h2 className="sr-only">Products purchased</h2>
-
-          <div className="space-y-8">
-            {products.map((product) => (
-              <div
-                key={product.id}
-                className="border-t border-b border-gray-200 bg-white shadow-xs sm:rounded-lg sm:border"
-              >
-                <div className="px-4 py-6 sm:px-6 lg:grid lg:grid-cols-12 lg:gap-x-8 lg:p-8">
-                  <div className="sm:flex lg:col-span-7">
-                    <img
-                      alt={product.imageAlt}
-                      src={product.imageSrc}
-                      className="aspect-square w-full shrink-0 rounded-lg object-cover sm:size-40"
-                    />
-
-                    <div className="mt-6 sm:mt-0 sm:ml-6">
-                      <h3 className="text-base font-medium text-gray-900">
-                        <a href={product.href}>{product.name}</a>
-                      </h3>
-                      <p className="mt-2 text-sm font-medium text-gray-900">${product.price}</p>
-                      <p className="mt-3 text-sm text-gray-500">{product.description}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 lg:col-span-5 lg:mt-0">
-                    <dl className="grid grid-cols-2 gap-x-6 text-sm">
-                      <div>
-                        <dt className="font-medium text-gray-900">Delivery address</dt>
-                        <dd className="mt-3 text-gray-500">
-                          <span className="block">{product.address[0]}</span>
-                          <span className="block">{product.address[1]}</span>
-                          <span className="block">{product.address[2]}</span>
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="font-medium text-gray-900">Shipping updates</dt>
-                        <dd className="mt-3 space-y-3 text-gray-500">
-                          <p>{product.email}</p>
-                          <p>{product.phone}</p>
-                          <button type="button" className="font-medium text-indigo-600 hover:text-indigo-500">
-                            Edit
-                          </button>
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
-                </div>
-
-                <div className="border-t border-gray-200 px-4 py-6 sm:px-6 lg:p-8">
-                  <h4 className="sr-only">Status</h4>
-                  <p className="text-sm font-medium text-gray-900">
-                    {product.status} on <time dateTime={product.datetime}>{product.date}</time>
-                  </p>
-                  <div aria-hidden="true" className="mt-6">
-                    <div className="overflow-hidden rounded-full bg-gray-200">
-                      <div
-                        style={{ width: `calc((${product.step} * 2 + 1) / 8 * 100%)` }}
-                        className="h-2 rounded-full bg-indigo-600"
-                      />
-                    </div>
-                    <div className="mt-6 hidden grid-cols-4 text-sm font-medium text-gray-600 sm:grid">
-                      <div className="text-indigo-600">Order placed</div>
-                      <div className={classNames(product.step > 0 ? 'text-indigo-600' : '', 'text-center')}>
-                        Processing
-                      </div>
-                      <div className={classNames(product.step > 1 ? 'text-indigo-600' : '', 'text-center')}>
-                        Shipped
-                      </div>
-                      <div className={classNames(product.step > 2 ? 'text-indigo-600' : '', 'text-right')}>
-                        Delivered
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Billing */}
-        <div className="mt-16">
-          <h2 className="sr-only">Billing Summary</h2>
-
-          <div className="bg-gray-100 px-4 py-6 sm:rounded-lg sm:px-6 lg:grid lg:grid-cols-12 lg:gap-x-8 lg:px-8 lg:py-8">
-            <dl className="grid grid-cols-2 gap-6 text-sm md:gap-x-8 lg:col-span-7">
-              <div>
-                <dt className="font-medium text-gray-900">Billing address</dt>
-                <dd className="mt-3 text-gray-500">
-                  <span className="block">Floyd Miles</span>
-                  <span className="block">7363 Cynthia Pass</span>
-                  <span className="block">Toronto, ON N3Y 4H8</span>
-                </dd>
-              </div>
-              <div>
-                <dt className="font-medium text-gray-900">Payment information</dt>
-                <dd className="-mt-1 -ml-4 flex flex-wrap">
-                  <div className="mt-4 ml-4 shrink-0">
-                    <svg width={36} height={24} viewBox="0 0 36 24" aria-hidden="true" className="h-6 w-auto">
-                      <rect rx={4} fill="#224DBA" width={36} height={24} />
-                      <path
-                        d="M10.925 15.673H8.874l-1.538-6c-.073-.276-.228-.52-.456-.635A6.575 6.575 0 005 8.403v-.231h3.304c.456 0 .798.347.855.75l.798 4.328 2.05-5.078h1.994l-3.076 7.5zm4.216 0h-1.937L14.8 8.172h1.937l-1.595 7.5zm4.101-5.422c.057-.404.399-.635.798-.635a3.54 3.54 0 011.88.346l.342-1.615A4.808 4.808 0 0020.496 8c-1.88 0-3.248 1.039-3.248 2.481 0 1.097.969 1.673 1.653 2.02.74.346 1.025.577.968.923 0 .519-.57.75-1.139.75a4.795 4.795 0 01-1.994-.462l-.342 1.616a5.48 5.48 0 002.108.404c2.108.057 3.418-.981 3.418-2.539 0-1.962-2.678-2.077-2.678-2.942zm9.457 5.422L27.16 8.172h-1.652a.858.858 0 00-.798.577l-2.848 6.924h1.994l.398-1.096h2.45l.228 1.096h1.766zm-2.905-5.482l.57 2.827h-1.596l1.026-2.827z"
-                        fill="#fff"
-                      />
-                    </svg>
-                    <p className="sr-only">Visa</p>
-                  </div>
-                  <div className="mt-4 ml-4">
-                    <p className="text-gray-900">Ending with 4242</p>
-                    <p className="text-gray-600">Expires 02 / 24</p>
-                  </div>
-                </dd>
-              </div>
-            </dl>
-
-            <dl className="mt-8 divide-y divide-gray-200 text-sm lg:col-span-5 lg:mt-0">
-              <div className="flex items-center justify-between pb-4">
-                <dt className="text-gray-600">Subtotal</dt>
-                <dd className="font-medium text-gray-900">$72</dd>
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <dt className="text-gray-600">Shipping</dt>
-                <dd className="font-medium text-gray-900">$5</dd>
-              </div>
-              <div className="flex items-center justify-between py-4">
-                <dt className="text-gray-600">Tax</dt>
-                <dd className="font-medium text-gray-900">$6.16</dd>
-              </div>
-              <div className="flex items-center justify-between pt-4">
-                <dt className="font-medium text-gray-900">Order total</dt>
-                <dd className="font-medium text-indigo-600">$83.16</dd>
-              </div>
-            </dl>
-          </div>
         </div>
       </div>
-    </div>
-  )
-}
 
-export default Orders
+      {/* Status filter pills */}
+      <div className="mt-6 flex flex-wrap gap-2">
+        {["all", ...STATUS_OPTIONS].map((status) => (
+          <button
+            key={status}
+            onClick={() => setFilter(status)}
+            className={`rounded-full border px-3 py-1.5 text-sm font-medium capitalize transition ${
+              filter === status
+                ? "border-blue-600 bg-blue-600 text-white"
+                : "border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-600"
+            }`}
+          >
+            {status === "all" ? "All" : statusLabel(status)}
+            <span
+              className={`ml-2 ${
+                filter === status ? "text-blue-100" : "text-gray-400"
+              }`}
+            >
+              {counts[status]}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <p className="mt-10 text-sm text-gray-500">Loading orders...</p>
+      ) : visibleOrders.length === 0 ? (
+        <div className="mt-10 rounded-lg border border-dashed border-gray-300 py-24 text-center">
+          <p className="text-sm text-gray-500">No orders found.</p>
+        </div>
+      ) : (
+        <div className="mt-8 space-y-4">
+          {visibleOrders.map((order) => {
+            const isOpen = openId === order._id;
+            return (
+              <div
+                key={order._id}
+                className="overflow-hidden rounded-lg border border-gray-200 bg-white"
+              >
+                {/* Accordion header */}
+                <button
+                  onClick={() => setOpenId(isOpen ? null : order._id)}
+                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left hover:bg-gray-50"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-4">
+                    <UserCircleIcon className="size-8 shrink-0 text-gray-400" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-gray-900">
+                        {order.orderNumber}
+                      </p>
+                      <p className="truncate text-xs text-gray-500">
+                        {order.shippingAddress?.fullName} ·{" "}
+                        {order.contactEmail}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="hidden items-center gap-6 sm:flex">
+                    <span className="text-xs text-gray-500">
+                      {formatDate(order.createdAt)}
+                    </span>
+                    <span className="text-sm font-medium text-gray-900">
+                      ${order.total.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium capitalize ${
+                      statusStyles[order.status] || statusStyles.placed
+                    }`}
+                  >
+                    {statusLabel(order.status)}
+                  </span>
+
+                  <ChevronDownIcon
+                    className={`size-5 shrink-0 text-gray-400 transition-transform ${
+                      isOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {/* Accordion body */}
+                {isOpen && (
+                  <div className="border-t border-gray-200 bg-gray-50/60 px-5 py-5">
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                      {/* Items */}
+                      <div className="lg:col-span-2">
+                        <h3 className="text-sm font-semibold text-gray-900">
+                          Items ({order.items.length})
+                        </h3>
+                        <ul className="mt-3 divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white">
+                          {order.items.map((item, index) => (
+                            <li
+                              key={`${item.product}-${item.color}-${item.size}-${index}`}
+                              className="flex items-center gap-4 p-3"
+                            >
+                              {item.image && (
+                                <img
+                                  alt={item.title}
+                                  src={item.image}
+                                  className="size-14 shrink-0 rounded-md object-cover"
+                                />
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-medium text-gray-900">
+                                  {item.title}
+                                </p>
+                                <p className="mt-0.5 text-xs text-gray-500">
+                                  {item.color} · {item.size} · Qty{" "}
+                                  {item.quantity}
+                                </p>
+                              </div>
+                              <p className="text-sm font-medium text-gray-900">
+                                ${(item.price * item.quantity).toFixed(2)}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      {/* Meta: address, payment, status control */}
+                      <div className="space-y-5">
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-900">
+                            Delivery address
+                          </h3>
+                          <div className="mt-2 text-sm text-gray-600">
+                            <p>{order.shippingAddress?.fullName}</p>
+                            <p>{order.shippingAddress?.addressLine1}</p>
+                            {order.shippingAddress?.addressLine2 && (
+                              <p>{order.shippingAddress.addressLine2}</p>
+                            )}
+                            <p>
+                              {order.shippingAddress?.city},{" "}
+                              {order.shippingAddress?.state} -{" "}
+                              {order.shippingAddress?.pincode}
+                            </p>
+                            <p>{order.shippingAddress?.country}</p>
+                            <p className="mt-1 text-gray-500">
+                              {order.shippingAddress?.phone}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-900">
+                            Order summary
+                          </h3>
+                          <dl className="mt-2 space-y-1 text-sm text-gray-600">
+                            <div className="flex justify-between">
+                              <dt>Subtotal</dt>
+                              <dd>${order.subtotal.toFixed(2)}</dd>
+                            </div>
+                            <div className="flex justify-between">
+                              <dt>Shipping</dt>
+                              <dd>${order.shipping.toFixed(2)}</dd>
+                            </div>
+                            <div className="flex justify-between">
+                              <dt>Taxes</dt>
+                              <dd>${order.taxes.toFixed(2)}</dd>
+                            </div>
+                            <div className="flex justify-between border-t border-gray-200 pt-1 font-medium text-gray-900">
+                              <dt>Total</dt>
+                              <dd>${order.total.toFixed(2)}</dd>
+                            </div>
+                          </dl>
+                          <p className="mt-2 text-xs text-gray-500">
+                            {order.deliveryMethod} delivery ·{" "}
+                            {order.contactEmail}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-900">
+                            Update status
+                          </label>
+                          <select
+                            value={order.status}
+                            disabled={updatingId === order._id}
+                            onChange={(e) =>
+                              handleStatusChange(order._id, e.target.value)
+                            }
+                            className="mt-2 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                          >
+                            {STATUS_OPTIONS.map((status) => (
+                              <option key={status} value={status}>
+                                {statusLabel(status)}
+                              </option>
+                            ))}
+                          </select>
+                          {updatingId === order._id && (
+                            <p className="mt-1 text-xs text-gray-500">
+                              Saving...
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Orders;

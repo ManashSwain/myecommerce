@@ -158,3 +158,64 @@ export const getOrderById = async (req, res) => {
   }
 };
 
+// GET ALL ORDERS (get) — admin. Newest first, optional ?status= filter.
+export const getAllOrders = async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = {};
+    if (status && status !== "all") filter.status = status;
+    const orders = await Order.find(filter).sort({ createdAt: -1 });
+    return res.status(200).json({
+      success: true,
+      message: "Fetched all orders successfully",
+      data: orders,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// UPDATE ORDER STATUS (patch) — admin
+export const updateOrderStatus = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { status } = req.body;
+    const allowed = ["placed", "processing", "shipped", "delivered"];
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+    if (!allowed.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Status must be one of: ${allowed.join(", ")}`,
+      });
+    }
+    const order = await Order.findByIdAndUpdate(
+      orderId,
+      { status },
+      { new: true, runValidators: true }
+    );
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+    return res.status(200).json({
+      success: true,
+      message: "Order status updated successfully",
+      data: order,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+
