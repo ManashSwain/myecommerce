@@ -33,9 +33,13 @@ const STEPS = [
   { key: "delivered", label: "Delivered", caption: "your order has arrived" },
 ];
 
-// Terminal statuses are shown as a simple headline instead of the tracking
-// progress bar (the 4-step tracker no longer applies once an order is off).
+// Orders that have left the linear placed→delivered track are shown as a
+// simple headline + note instead of the 4-step progress bar.
 const TERMINAL_STATUSES = {
+  return_in_transit: {
+    label: "Returning to us",
+    caption: "your parcel is on its way back to our warehouse",
+  },
   cancelled: { label: "Order cancelled", caption: "your order has been cancelled" },
   refunded: { label: "Order refunded", caption: "your refund has been processed" },
 };
@@ -159,7 +163,7 @@ const Orderstatus = ({ order = {} }) => {
           )
         ),
 
-        // Refund note for cancelled / refunded orders.
+        // Refund note for cancelled / refunded / returning orders.
         isTerminal(status)
           ? h(
               Section,
@@ -171,9 +175,13 @@ const Orderstatus = ({ order = {} }) => {
                   ? `A refund of ${formatCurrency(
                       order.cancellation?.refundAmount || total
                     )} has been processed to your original payment method.`
-                  : `A refund of ${formatCurrency(
-                      order.cancellation?.refundAmount || total
-                    )} is being processed and will reach your account shortly.`
+                  : status === "return_in_transit"
+                    ? `Your parcel is on its way back to us. Once it reaches our warehouse we'll restore it to stock and issue your refund of ${formatCurrency(
+                        order.cancellation?.refundAmount || total
+                      )}.`
+                    : `A refund of ${formatCurrency(
+                        order.cancellation?.refundAmount || total
+                      )} is being processed and will reach your account shortly.`
               )
             )
           : // Progress tracker (only for active orders)

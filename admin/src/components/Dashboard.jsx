@@ -36,6 +36,7 @@ const STATUS_COLORS = {
   processing: "#d97706",
   shipped: "#2563eb",
   delivered: "#059669",
+  return_in_transit: "#0284c7",
   cancelled: "#dc2626",
   refunded: "#0d9488",
 };
@@ -415,6 +416,11 @@ const DashboardContent = ({ data }) => {
             )}
 
             <div className="border-t border-gray-100 pt-4">
+              <InventoryRow
+                label="Returns in transit"
+                value={summary.returnsInTransit}
+                tone={summary.returnsInTransit > 0 ? "text-sky-600" : "text-gray-900"}
+              />
               <InventoryRow
                 label="Cancelled orders"
                 value={summary.cancelledOrders}

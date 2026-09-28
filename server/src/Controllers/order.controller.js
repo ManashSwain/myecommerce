@@ -20,9 +20,16 @@ const generateOrderNumber = () =>
     Math.random() * 90 + 10
   )}`;
 
-// Statuses where the order has left the warehouse and can no longer be
-// cancelled by the customer.
-const NON_CANCELLABLE_STATUSES = ["shipped", "delivered", "cancelled", "refunded"];
+// Statuses in which the customer can no longer cancel their order.
+//  • shipped   → goods are with the courier; must be received back first
+//  • the rest  → already finalised / on their way back
+const NON_CANCELLABLE_STATUSES = [
+  "shipped",
+  "delivered",
+  "return_in_transit",
+  "cancelled",
+  "refunded",
+];
 
 // Put the ordered quantities back into product variant stock. Called when an
 // order is cancelled (the mirror of the decrement done at order time).
@@ -45,21 +52,37 @@ const restockOrderItems = async (order) => {
 
 // Shared cancellation logic for both customer and admin cancellations.
 // `cancelledBy` is "user" or "admin"; `reason` is optional free text.
+//
+// Two-stage stock handling (no oversell):
+//   • Not yet shipped  → the goods never left the warehouse, so the order is
+//     cancelled immediately and stock goes back on the shelf right away.
+//   • Already shipped  → the item is with the courier / customer, so it
+//     becomes "return_in_transit". Stock is NOT restored and no refund is
+//     issued until an admin confirms the item is back at the store
+//     (see receiveReturn).
 const applyCancellation = async (order, { cancelledBy, reason }) => {
-  order.status = "cancelled";
+  const wasShipped = order.status === "shipped";
+
+  order.status = wasShipped ? "return_in_transit" : "cancelled";
   // Money was collected at checkout, so a refund is now owed.
   order.paymentStatus = "refund_pending";
   order.cancellation = {
     cancelledBy,
     reason: reason || "",
     cancelledAt: new Date(),
+    wasShipped,
     refundStatus: "pending",
     refundAmount: order.total,
+    stockRestored: false,
   };
   await order.save();
 
-  // Return the stock so cancelled items become sellable again.
-  await restockOrderItems(order);
+  // Only restock straight away when the goods never left the warehouse.
+  if (!wasShipped) {
+    await restockOrderItems(order);
+    order.cancellation.stockRestored = true;
+    await order.save();
+  }
 
   notifyOrderStatus(order);
   return order;
@@ -490,7 +513,9 @@ export const cancelMyOrder = async (req, res) => {
         message:
           order.status === "shipped" || order.status === "delivered"
             ? `This order has been ${order.status} and can no longer be cancelled. Please contact support for help.`
-            : `This order is already ${pretty.toLowerCase()} and cannot be cancelled again.`,
+            : order.status === "return_in_transit"
+              ? "This order is already on its way back to us."
+              : `This order is already ${pretty.toLowerCase()} and cannot be cancelled again.`,
       });
     }
 
@@ -501,8 +526,9 @@ export const cancelMyOrder = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message:
-        "Order cancelled. Your refund will be processed shortly.",
+      message: cancelled.cancellation?.wasShipped
+        ? "Order cancelled. We'll arrange pickup of your parcel and process the refund once it reaches us."
+        : "Order cancelled. Your refund will be processed shortly.",
       data: cancelled,
     });
   } catch (err) {
@@ -516,8 +542,8 @@ export const cancelMyOrder = async (req, res) => {
 
 // CANCEL ORDER (patch) — admin.
 // Admins can cancel an order at any stage before it is delivered, and even
-// recall a shipped order. Terminal states (delivered / already cancelled /
-// refunded) are rejected.
+// recall a shipped order (which sends it to "return_in_transit" until the
+// item is received back). Terminal states are rejected.
 export const cancelOrderAdmin = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -536,13 +562,21 @@ export const cancelOrderAdmin = async (req, res) => {
         .json({ success: false, message: "Order not found" });
     }
 
-    if (["delivered", "cancelled", "refunded"].includes(order.status)) {
+    if (
+      ["delivered", "return_in_transit", "cancelled", "refunded"].includes(
+        order.status,
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: `An order that is already ${order.status} cannot be cancelled.`,
+        message:
+          order.status === "return_in_transit"
+            ? "This order is already on its way back. Receive the return to restock it."
+            : `An order that is already ${order.status} cannot be cancelled.`,
       });
     }
 
+    const wasShipped = order.status === "shipped";
     const cancelled = await applyCancellation(order, {
       cancelledBy: "admin",
       reason,
@@ -550,7 +584,9 @@ export const cancelOrderAdmin = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Order cancelled successfully",
+      message: wasShipped
+        ? "Shipped order marked as return-in-transit. Stock will be restored once the item is received."
+        : "Order cancelled successfully",
       data: cancelled,
     });
   } catch (err) {
@@ -562,9 +598,76 @@ export const cancelOrderAdmin = async (req, res) => {
   }
 };
 
+// RECEIVE RETURN (patch) — admin.
+// The moment a returned item physically reaches the store. This is what puts
+// stock back on the shelf for an order that was cancelled after shipping, and
+// it moves the order from "return_in_transit" to "cancelled" so it becomes
+// refundable. Idempotent-ish: re-running on an already-received order is
+// rejected.
+export const receiveReturn = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    if (order.status !== "return_in_transit") {
+      return res.status(400).json({
+        success: false,
+        message:
+          order.cancellation?.stockRestored
+            ? "This return has already been received and restocked."
+            : "Only an order that is return-in-transit can be received.",
+      });
+    }
+
+    // Restock now that the goods are back at the store.
+    await restockOrderItems(order);
+
+    order.status = "cancelled";
+    order.cancellation = {
+      ...(order.cancellation?.toObject
+        ? order.cancellation.toObject()
+        : order.cancellation || {}),
+      returnedAt: new Date(),
+      stockRestored: true,
+    };
+    await order.save();
+
+    notifyOrderStatus(order);
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Return received. Stock restored — you can now process the refund.",
+      data: order,
+    });
+  } catch (err) {
+    console.error("receiveReturn error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 // REFUND ORDER (patch) — admin.
 // Marks a cancelled order's refund as completed. Optionally accepts a
 // refund reference (transaction id) and amount; defaults to the order total.
+//
+// For orders that were cancelled AFTER shipping, the return must have been
+// received first (status "cancelled" with stockRestored=true) — we never
+// refund an item that is still in transit and whose stock isn't back.
 export const refundOrder = async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -581,6 +684,14 @@ export const refundOrder = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
+    }
+
+    if (order.status === "return_in_transit") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This order is still on its way back. Receive the return before refunding.",
+      });
     }
 
     if (order.status !== "cancelled" && order.status !== "refunded") {

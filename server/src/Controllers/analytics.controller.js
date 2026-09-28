@@ -52,11 +52,13 @@ export const getDashboardAnalytics = async (req, res) => {
     // memory across the several views we need. (Swap to $facet for scale.)
     const allOrders = await Order.find({}).lean();
 
-    // Cancelled / refunded orders are NOT sales: money was returned, so they
-    // are excluded from every revenue metric, best-seller list and category
-    // breakdown. They only appear in the cancellation counters below.
+    // Cancelled / refunded / returning orders are NOT sales: the money is (or
+    // will be) returned, so they are excluded from every revenue metric,
+    // best-seller list and category breakdown. They only appear in the
+    // cancellation counters below.
+    const NON_SALES_STATUSES = ["cancelled", "refunded", "return_in_transit"];
     const orders = allOrders.filter(
-      (o) => o.status !== "cancelled" && o.status !== "refunded",
+      (o) => !NON_SALES_STATUSES.includes(o.status),
     );
 
     const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
@@ -70,6 +72,9 @@ export const getDashboardAnalytics = async (req, res) => {
     ).length;
     const refundedOrders = allOrders.filter(
       (o) => o.status === "refunded",
+    ).length;
+    const returnsInTransit = allOrders.filter(
+      (o) => o.status === "return_in_transit",
     ).length;
     const refundedValue = allOrders
       .filter((o) => o.status === "cancelled" || o.status === "refunded")
@@ -120,6 +125,7 @@ export const getDashboardAnalytics = async (req, res) => {
       processing: 0,
       shipped: 0,
       delivered: 0,
+      return_in_transit: 0,
       cancelled: 0,
       refunded: 0,
     };
@@ -277,6 +283,7 @@ export const getDashboardAnalytics = async (req, res) => {
           avgRating: Number(avgRating.toFixed(2)),
           cancelledOrders,
           refundedOrders,
+          returnsInTransit,
           refundedValue: Number(refundedValue.toFixed(2)),
         },
         dailySales,

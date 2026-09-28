@@ -7,6 +7,7 @@ import {
   getAllOrders,
   getOrderById,
   getOrders,
+  receiveReturn,
   refundOrder,
   updateOrderStatus,
 } from "../Controllers/order.controller.js";
@@ -25,6 +26,8 @@ router.get("/getallorders", getAllOrders);
 router.patch("/updatestatus/:orderId", updateOrderStatus);
 // Admin cancels any cancellable order; then processes the refund
 router.patch("/admin/cancel/:orderId", cancelOrderAdmin);
+// Admin confirms a returned item has reached the store (restocks it)
+router.patch("/admin/receivereturn/:orderId", receiveReturn);
 router.patch("/admin/refund/:orderId", refundOrder);
 
 export default router;

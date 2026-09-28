@@ -20,8 +20,9 @@ function classNames(...classes) {
 // Ordered tracking steps — index matches the statusStep() value below.
 const STEPS = ["Order placed", "Processing", "Shipped", "Delivered"];
 
-// Terminal statuses do not fit the linear tracker.
-const CANCELLED_STATUSES = ["cancelled", "refunded"];
+// Orders that have left the linear placed→delivered track hide the progress
+// bar and show a notice instead.
+const CANCELLED_STATUSES = ["return_in_transit", "cancelled", "refunded"];
 
 // Map an order status to the progress bar step (0-3)
 const statusStep = (status) => {
@@ -37,8 +38,14 @@ const statusStep = (status) => {
   }
 };
 
-const statusLabel = (status) =>
-  status ? status.charAt(0).toUpperCase() + status.slice(1) : "Placed";
+const STATUS_LABELS = {
+  return_in_transit: "Returning to us",
+};
+const statusLabel = (status) => {
+  if (!status) return "Placed";
+  if (STATUS_LABELS[status]) return STATUS_LABELS[status];
+  return status.charAt(0).toUpperCase() + status.slice(1);
+};
 
 // A customer may cancel while the order is still placed/processing.
 const canCancel = (status) => status === "placed" || status === "processing";
@@ -184,6 +191,8 @@ const Orders = () => {
                       <span
                         className={classNames(
                           "rounded-full px-2.5 py-1 text-xs font-medium",
+                          order.status === "return_in_transit" &&
+                            "bg-blue-50 text-blue-700",
                           order.status === "cancelled" &&
                             "bg-red-50 text-red-700",
                           order.status === "refunded" &&
@@ -199,16 +208,27 @@ const Orders = () => {
                     </div>
                   </div>
 
-                  {/* Cancellation / refund notice */}
+                  {/* Returning / cancellation / refund notice */}
                   {isCancelled && (
-                    <div className="border-b border-gray-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:px-6">
-                      {order.status === "refunded"
-                        ? `This order was cancelled and a refund of ${formatCurrency(
+                    <div
+                      className={classNames(
+                        "border-b border-gray-200 px-4 py-3 text-sm sm:px-6",
+                        order.status === "return_in_transit"
+                          ? "bg-blue-50 text-blue-800"
+                          : "bg-amber-50 text-amber-800",
+                      )}
+                    >
+                      {order.status === "return_in_transit"
+                        ? `This order was cancelled after it shipped. The parcel is on its way back to us — we'll refund ${formatCurrency(
                             order.cancellation?.refundAmount ?? order.total,
-                          )} has been processed.`
-                        : `This order was cancelled. A refund of ${formatCurrency(
-                            order.cancellation?.refundAmount ?? order.total,
-                          )} is being processed.`}
+                          )} once it reaches our warehouse.`
+                        : order.status === "refunded"
+                          ? `This order was cancelled and a refund of ${formatCurrency(
+                              order.cancellation?.refundAmount ?? order.total,
+                            )} has been processed.`
+                          : `This order was cancelled. A refund of ${formatCurrency(
+                              order.cancellation?.refundAmount ?? order.total,
+                            )} is being processed.`}
                     </div>
                   )}
 

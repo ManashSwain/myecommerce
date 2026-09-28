@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 import {
   cancelOrderAdmin,
   getAllOrders,
+  receiveReturnAdmin,
   refundOrderAdmin,
   updateOrderStatus,
 } from "../utils/order";
@@ -19,6 +20,7 @@ const FILTER_OPTIONS = [
   "processing",
   "shipped",
   "delivered",
+  "return_in_transit",
   "cancelled",
   "refunded",
 ];
@@ -29,20 +31,30 @@ const statusStyles = {
   processing: "bg-amber-100 text-amber-700",
   shipped: "bg-blue-100 text-blue-700",
   delivered: "bg-green-100 text-green-700",
+  return_in_transit: "bg-sky-100 text-sky-700",
   cancelled: "bg-red-100 text-red-700",
   refunded: "bg-emerald-100 text-emerald-700",
 };
 
-// Terminal states can't be cancelled/refunded any further.
+const STATUS_LABELS = {
+  return_in_transit: "Return in transit",
+};
+const statusLabel = (status) => {
+  if (!status) return "Placed";
+  if (STATUS_LABELS[status]) return STATUS_LABELS[status];
+  return status.charAt(0).toUpperCase() + status.slice(1);
+};
+
+// Terminal states can't be cancelled any further (return_in_transit still
+// needs a "receive return" action, so it is NOT terminal).
 const isTerminal = (status) =>
   ["delivered", "cancelled", "refunded"].includes(status);
-const canCancel = (status) => !isTerminal(status);
+const canCancel = (status) => !isTerminal(status) && status !== "return_in_transit";
+// A return-in-transit order needs to be received before it can be refunded.
+const canReceiveReturn = (status) => status === "return_in_transit";
 const canRefund = (order) =>
   order.status === "cancelled" &&
   order.cancellation?.refundStatus !== "completed";
-
-const statusLabel = (status) =>
-  status ? status.charAt(0).toUpperCase() + status.slice(1) : "Placed";
 
 const formatDate = (value) =>
   new Date(value).toLocaleDateString(undefined, {
@@ -137,10 +149,30 @@ const Orders = () => {
     }
   };
 
-  // Cancel + refund flow
+  // Cancel + receive-return + refund flow
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [returnTarget, setReturnTarget] = useState(null);
   const [refundTarget, setRefundTarget] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+
+  const confirmReceiveReturn = async () => {
+    if (!returnTarget) return;
+    setActionBusy(true);
+    try {
+      const updated = await receiveReturnAdmin(returnTarget._id);
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o))
+      );
+      toast.success(
+        `Return received for ${updated.orderNumber} — stock restored`
+      );
+      setReturnTarget(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const confirmCancel = async () => {
     if (!cancelTarget) return;
@@ -415,13 +447,15 @@ const Orders = () => {
                           <label className="block text-sm font-semibold text-gray-900">
                             Update status
                           </label>
-                          {isTerminal(order.status) ? (
+                          {isTerminal(order.status) || canReceiveReturn(order.status) ? (
                             <p
                               className={`mt-2 rounded-md px-3 py-2 text-sm ${
                                 statusStyles[order.status] || statusStyles.placed
                               }`}
                             >
                               {statusLabel(order.status)}
+                              {order.status === "return_in_transit" &&
+                                " — awaiting return"}
                               {order.status === "cancelled" &&
                                 " — awaiting refund"}
                               {order.status === "refunded" && " — refund completed"}
@@ -448,7 +482,7 @@ const Orders = () => {
                             </p>
                           )}
 
-                          {/* Cancellation / refund details */}
+                          {/* Cancellation / return / refund details */}
                           {order.cancellation?.cancelledAt && (
                             <div className="mt-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600">
                               <p>
@@ -462,6 +496,22 @@ const Orders = () => {
                               {order.cancellation.reason && (
                                 <p className="mt-1">
                                   Reason: {order.cancellation.reason}
+                                </p>
+                              )}
+                              {order.cancellation.wasShipped && (
+                                <p className="mt-1">
+                                  Stock:{" "}
+                                  <span className="font-medium">
+                                    {order.cancellation.stockRestored
+                                      ? "returned to inventory"
+                                      : "still in transit (not restocked)"}
+                                  </span>
+                                </p>
+                              )}
+                              {order.cancellation.returnedAt && (
+                                <p className="mt-1">
+                                  Return received:{" "}
+                                  {formatDate(order.cancellation.returnedAt)}
                                 </p>
                               )}
                               <p className="mt-1">
@@ -487,6 +537,15 @@ const Orders = () => {
                                 className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
                               >
                                 Cancel order
+                              </button>
+                            )}
+                            {canReceiveReturn(order.status) && (
+                              <button
+                                type="button"
+                                onClick={() => setReturnTarget(order)}
+                                className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
+                              >
+                                Receive return
                               </button>
                             )}
                             {canRefund(order) && (
@@ -599,6 +658,16 @@ const Orders = () => {
         confirmLabel="Yes, cancel order"
         onConfirm={confirmCancel}
         onCancel={() => !actionBusy && setCancelTarget(null)}
+      />
+
+      <ConfirmModal
+        open={!!returnTarget}
+        title="Receive return"
+        message={`Confirm the item(s) for order ${returnTarget?.orderNumber} have been received back at the store. This restores the ordered quantities to inventory so the order can then be refunded.`}
+        confirmLabel="Yes, receive return"
+        tone="green"
+        onConfirm={confirmReceiveReturn}
+        onCancel={() => !actionBusy && setReturnTarget(null)}
       />
 
       <ConfirmModal

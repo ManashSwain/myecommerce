@@ -41,6 +41,23 @@ export const cancelOrderAdmin = async (orderId, reason) => {
   return json.data;
 };
 
+// Admin confirms a returned item has physically reached the store. This is
+// what restocks a shipped-then-cancelled order and makes it refundable.
+export const receiveReturnAdmin = async (orderId) => {
+  const res = await fetch(
+    `${API_BASE_URL}/api/order/admin/receivereturn/${orderId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+  const json = await res.json();
+  if (!res.ok || json.success === false) {
+    throw new Error(json.message || "Could not receive the return");
+  }
+  return json.data;
+};
+
 // Admin processes the refund for a cancelled order. Optional transaction
 // reference is stored on the order.
 export const refundOrderAdmin = async (orderId, refundReference = "") => {

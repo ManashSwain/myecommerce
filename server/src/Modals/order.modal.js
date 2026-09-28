@@ -110,9 +110,24 @@ const orderSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    // Order lifecycle:
+    //   placed → processing → shipped → delivered
+    // Cancellation:
+    //   placed/processing cancelled  → cancelled         (stock back now)
+    //   shipped cancelled            → return_in_transit (stock back only when
+    //                                   the item physically reaches the store)
+    // Refund finishes an order: cancelled/return_in_transit → refunded
     status: {
       type: String,
-      enum: ["placed", "processing", "shipped", "delivered", "cancelled", "refunded"],
+      enum: [
+        "placed",
+        "processing",
+        "shipped",
+        "delivered",
+        "return_in_transit",
+        "cancelled",
+        "refunded",
+      ],
       default: "placed",
     },
 
@@ -126,7 +141,7 @@ const orderSchema = new mongoose.Schema(
     },
 
     // Populated when an order is cancelled (by the customer or an admin) and
-    // updated again once the refund is processed.
+    // updated again once the item is received back and the refund is processed.
     cancellation: {
       cancelledBy: {
         type: String,
@@ -137,6 +152,23 @@ const orderSchema = new mongoose.Schema(
       },
       cancelledAt: {
         type: Date,
+      },
+      // Whether the goods were already out for delivery when cancelled. When
+      // true, the order sits in "return_in_transit" until an admin confirms
+      // the item is back at the store.
+      wasShipped: {
+        type: Boolean,
+        default: false,
+      },
+      // Set when an admin marks the returned item as received. Only at this
+      // point is stock put back on the shelf.
+      returnedAt: {
+        type: Date,
+      },
+      // True once the ordered quantities have been added back to inventory.
+      stockRestored: {
+        type: Boolean,
+        default: false,
       },
       // Refund lifecycle for a cancelled order.
       refundStatus: {
