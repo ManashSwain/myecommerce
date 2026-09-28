@@ -2,8 +2,17 @@ import mongoose from "mongoose";
 import { Order } from "../Modals/order.modal.js";
 import { Cart } from "../Modals/cart.modal.js";
 import { Product } from "../Modals/product.modal.js";
+import { sendOrderStatusEmail } from "../utils/email.js";
 
 const TAX_RATE = 0.0863;
+
+// Fire-and-forget order email so a mail failure never breaks the API
+// response. Logs (rather than throws) on failure.
+const notifyOrderStatus = (order) => {
+  sendOrderStatusEmail(order).catch((err) =>
+    console.error("Order status email failed:", err.message)
+  );
+};
 
 // Generate a human-friendly order number, e.g. "ORD-482913"
 const generateOrderNumber = () =>
@@ -125,6 +134,9 @@ export const createOrder = async (req, res) => {
     cart.items = [];
     cart.subtotal = 0;
     await cart.save();
+
+    // Send the confirmation email (non-blocking)
+    notifyOrderStatus(order);
 
     return res.status(201).json({
       success: true,
@@ -263,6 +275,9 @@ export const createDirectOrder = async (req, res) => {
 
     // NOTE: the user's cart is intentionally left untouched.
 
+    // Send the confirmation email (non-blocking)
+    notifyOrderStatus(order);
+
     return res.status(201).json({
       success: true,
       message: "Order placed successfully",
@@ -370,6 +385,10 @@ export const updateOrderStatus = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Order not found" });
     }
+
+    // Let the customer know their order status changed (non-blocking)
+    notifyOrderStatus(order);
+
     return res.status(200).json({
       success: true,
       message: "Order status updated successfully",
