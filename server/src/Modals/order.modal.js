@@ -112,8 +112,48 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["placed", "processing", "shipped", "delivered"],
+      enum: ["placed", "processing", "shipped", "delivered", "cancelled", "refunded"],
       default: "placed",
+    },
+
+    // Payment / refund tracking. Orders are paid at checkout in this project,
+    // so they start as "paid"; cancelling flips them to refund_pending and an
+    // admin refund flips them to refunded.
+    paymentStatus: {
+      type: String,
+      enum: ["pending", "paid", "refund_pending", "refunded"],
+      default: "paid",
+    },
+
+    // Populated when an order is cancelled (by the customer or an admin) and
+    // updated again once the refund is processed.
+    cancellation: {
+      cancelledBy: {
+        type: String,
+        enum: ["user", "admin"],
+      },
+      reason: {
+        type: String,
+      },
+      cancelledAt: {
+        type: Date,
+      },
+      // Refund lifecycle for a cancelled order.
+      refundStatus: {
+        type: String,
+        enum: ["not_required", "pending", "completed"],
+        default: "not_required",
+      },
+      refundAmount: {
+        type: Number,
+        default: 0,
+      },
+      refundedAt: {
+        type: Date,
+      },
+      refundReference: {
+        type: String,
+      },
     },
   },
   { timestamps: true }

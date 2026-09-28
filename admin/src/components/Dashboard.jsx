@@ -36,6 +36,8 @@ const STATUS_COLORS = {
   processing: "#d97706",
   shipped: "#2563eb",
   delivered: "#059669",
+  cancelled: "#dc2626",
+  refunded: "#0d9488",
 };
 
 // Amounts are in Indian Rupees to match the storefront (cart/checkout use ₹).
@@ -411,6 +413,24 @@ const DashboardContent = ({ data }) => {
                 restock soon.
               </p>
             )}
+
+            <div className="border-t border-gray-100 pt-4">
+              <InventoryRow
+                label="Cancelled orders"
+                value={summary.cancelledOrders}
+                tone={summary.cancelledOrders > 0 ? "text-red-600" : "text-gray-900"}
+              />
+              <InventoryRow
+                label="Refunded orders"
+                value={summary.refundedOrders}
+                tone={summary.refundedOrders > 0 ? "text-teal-600" : "text-gray-900"}
+              />
+              <InventoryRow
+                label="Value refunded"
+                value={money(summary.refundedValue)}
+                tone="text-gray-900"
+              />
+            </div>
           </div>
         </ChartCard>
 

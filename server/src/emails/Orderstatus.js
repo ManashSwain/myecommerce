@@ -33,14 +33,30 @@ const STEPS = [
   { key: "delivered", label: "Delivered", caption: "your order has arrived" },
 ];
 
+// Terminal statuses are shown as a simple headline instead of the tracking
+// progress bar (the 4-step tracker no longer applies once an order is off).
+const TERMINAL_STATUSES = {
+  cancelled: { label: "Order cancelled", caption: "your order has been cancelled" },
+  refunded: { label: "Order refunded", caption: "your refund has been processed" },
+};
+
+const isTerminal = (status) => Boolean(TERMINAL_STATUSES[status]);
+
 const statusStep = (status) => {
   const index = STEPS.findIndex((s) => s.key === status);
   return index === -1 ? 0 : index;
 };
 
 const statusLabel = (status) => {
+  if (TERMINAL_STATUSES[status]) return TERMINAL_STATUSES[status].label;
   const step = STEPS.find((s) => s.key === status);
   return step ? step.label : "Order placed";
+};
+
+const statusCaption = (status) => {
+  if (TERMINAL_STATUSES[status]) return TERMINAL_STATUSES[status].caption;
+  const step = STEPS.find((s) => s.key === status);
+  return step ? step.caption : "we received your order";
 };
 
 const formatCurrency = (amount) =>
@@ -136,31 +152,48 @@ const Orderstatus = ({ order = {} }) => {
           h(
             Text,
             { style: paragraph },
-            `Hi ${shippingAddress.fullName || "there"}, ${STEPS[current].caption}. Here's the latest on your order `,
+            `Hi ${shippingAddress.fullName || "there"}, ${statusCaption(status)}. Here's the latest on your order `,
             h("strong", null, orderNumber),
             createdAt ? `, placed on ${formatDate(createdAt)}` : "",
             "."
           )
         ),
 
-        // Progress tracker
-        h(
-          Section,
-          { style: { padding: "8px 32px 0" } },
-          h(
-            Row,
-            null,
-            ...STEPS.map((step, index) =>
-              h(StepCell, {
-                key: step.key,
-                index,
-                current,
-                isFirst: index === 0,
-                isLast: index === STEPS.length - 1,
-              })
+        // Refund note for cancelled / refunded orders.
+        isTerminal(status)
+          ? h(
+              Section,
+              { style: { padding: "8px 32px 0" } },
+              h(
+                Text,
+                { style: refundNote },
+                status === "refunded"
+                  ? `A refund of ${formatCurrency(
+                      order.cancellation?.refundAmount || total
+                    )} has been processed to your original payment method.`
+                  : `A refund of ${formatCurrency(
+                      order.cancellation?.refundAmount || total
+                    )} is being processed and will reach your account shortly.`
+              )
             )
-          )
-        ),
+          : // Progress tracker (only for active orders)
+            h(
+              Section,
+              { style: { padding: "8px 32px 0" } },
+              h(
+                Row,
+                null,
+                ...STEPS.map((step, index) =>
+                  h(StepCell, {
+                    key: step.key,
+                    index,
+                    current,
+                    isFirst: index === 0,
+                    isLast: index === STEPS.length - 1,
+                  })
+                )
+              )
+            ),
 
         h(Hr, { style: hr }),
 
@@ -398,6 +431,17 @@ const paragraph = {
   fontSize: 14,
   lineHeight: "22px",
   color: "#4b5563",
+};
+
+const refundNote = {
+  margin: 0,
+  padding: "12px 16px",
+  fontSize: 14,
+  lineHeight: "22px",
+  color: "#92400e",
+  backgroundColor: "#fffbeb",
+  border: "1px solid #fde68a",
+  borderRadius: 8,
 };
 
 const hr = {

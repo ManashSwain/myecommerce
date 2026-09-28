@@ -50,15 +50,30 @@ export const getDashboardAnalytics = async (req, res) => {
     // ---- Orders -----------------------------------------------------------
     // Fetch all orders once; the dataset is small enough to aggregate in
     // memory across the several views we need. (Swap to $facet for scale.)
-    const orders = await Order.find({}).lean();
+    const allOrders = await Order.find({}).lean();
 
-    // Only "real" revenue orders count towards sales figures. We include all
-    // statuses here because even a "placed" order represents a sale; refunds
-    // aren't modelled in this project.
+    // Cancelled / refunded orders are NOT sales: money was returned, so they
+    // are excluded from every revenue metric, best-seller list and category
+    // breakdown. They only appear in the cancellation counters below.
+    const orders = allOrders.filter(
+      (o) => o.status !== "cancelled" && o.status !== "refunded",
+    );
+
     const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
     const totalOrders = orders.length;
     const totalUnitsSold = orders.reduce((sum, o) => sum + orderUnits(o), 0);
     const avgOrderValue = totalOrders ? totalRevenue / totalOrders : 0;
+
+    // Cancellation / refund counters (all orders).
+    const cancelledOrders = allOrders.filter(
+      (o) => o.status === "cancelled",
+    ).length;
+    const refundedOrders = allOrders.filter(
+      (o) => o.status === "refunded",
+    ).length;
+    const refundedValue = allOrders
+      .filter((o) => o.status === "cancelled" || o.status === "refunded")
+      .reduce((sum, o) => sum + (o.cancellation?.refundAmount || 0), 0);
 
     // Daily sales for the requested window ---------------------------------
     const windowStart = new Date(todayStart);
@@ -99,9 +114,16 @@ export const getDashboardAnalytics = async (req, res) => {
       (o) => new Date(o.createdAt) >= todayStart,
     ).length;
 
-    // Order-status breakdown -----------------------------------------------
-    const statusCounts = { placed: 0, processing: 0, shipped: 0, delivered: 0 };
-    orders.forEach((o) => {
+    // Order-status breakdown (all orders, so cancelled/refunded show up) ----
+    const statusCounts = {
+      placed: 0,
+      processing: 0,
+      shipped: 0,
+      delivered: 0,
+      cancelled: 0,
+      refunded: 0,
+    };
+    allOrders.forEach((o) => {
       if (statusCounts[o.status] !== undefined) statusCounts[o.status] += 1;
     });
     const statusBreakdown = Object.entries(statusCounts).map(
@@ -253,6 +275,9 @@ export const getDashboardAnalytics = async (req, res) => {
           outOfStock,
           lowStock,
           avgRating: Number(avgRating.toFixed(2)),
+          cancelledOrders,
+          refundedOrders,
+          refundedValue: Number(refundedValue.toFixed(2)),
         },
         dailySales,
         statusBreakdown,

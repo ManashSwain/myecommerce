@@ -42,3 +42,18 @@ export const getOrders = async (userId) => {
     return [];
   }
 };
+
+// Cancel the signed-in user's own order. Only succeeds while the order is
+// still "placed" or "processing" — the backend rejects shipped/delivered.
+export const cancelOrder = async (orderId, userId, reason) => {
+  const res = await fetch(`${API_BASE_URL}/api/order/cancel/${orderId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId, reason }),
+  });
+  const json = await res.json();
+  if (!res.ok || json.success === false) {
+    throw new Error(json.message || "Could not cancel the order");
+  }
+  return json.data;
+};

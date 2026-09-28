@@ -2,9 +2,26 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronDownIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { toast } from "react-toastify";
-import { getAllOrders, updateOrderStatus } from "../utils/order";
+import {
+  cancelOrderAdmin,
+  getAllOrders,
+  refundOrderAdmin,
+  updateOrderStatus,
+} from "../utils/order";
+import ConfirmModal from "./ConfirmModal";
 
+// Statuses an admin can move an active order to via the dropdown.
 const STATUS_OPTIONS = ["placed", "processing", "shipped", "delivered"];
+
+// Every status, used for the filter pills.
+const FILTER_OPTIONS = [
+  "placed",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "refunded",
+];
 
 // Colours for the status pill
 const statusStyles = {
@@ -12,7 +29,17 @@ const statusStyles = {
   processing: "bg-amber-100 text-amber-700",
   shipped: "bg-blue-100 text-blue-700",
   delivered: "bg-green-100 text-green-700",
+  cancelled: "bg-red-100 text-red-700",
+  refunded: "bg-emerald-100 text-emerald-700",
 };
+
+// Terminal states can't be cancelled/refunded any further.
+const isTerminal = (status) =>
+  ["delivered", "cancelled", "refunded"].includes(status);
+const canCancel = (status) => !isTerminal(status);
+const canRefund = (order) =>
+  order.status === "cancelled" &&
+  order.cancellation?.refundStatus !== "completed";
 
 const statusLabel = (status) =>
   status ? status.charAt(0).toUpperCase() + status.slice(1) : "Placed";
@@ -80,7 +107,7 @@ const Orders = () => {
 
   const counts = useMemo(() => {
     const base = { all: orders.length };
-    STATUS_OPTIONS.forEach((status) => {
+    FILTER_OPTIONS.forEach((status) => {
       base[status] = orders.filter((o) => o.status === status).length;
     });
     return base;
@@ -110,6 +137,45 @@ const Orders = () => {
     }
   };
 
+  // Cancel + refund flow
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [refundTarget, setRefundTarget] = useState(null);
+  const [actionBusy, setActionBusy] = useState(false);
+
+  const confirmCancel = async () => {
+    if (!cancelTarget) return;
+    setActionBusy(true);
+    try {
+      const updated = await cancelOrderAdmin(cancelTarget._id);
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o))
+      );
+      toast.success(`Order ${updated.orderNumber} cancelled`);
+      setCancelTarget(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const confirmRefund = async () => {
+    if (!refundTarget) return;
+    setActionBusy(true);
+    try {
+      const updated = await refundOrderAdmin(refundTarget._id);
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o))
+      );
+      toast.success(`Refund processed for ${updated.orderNumber}`);
+      setRefundTarget(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
   return (
     <div className="py-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -125,7 +191,7 @@ const Orders = () => {
 
       {/* Status filter pills */}
       <div className="mt-6 flex flex-wrap gap-2">
-        {["all", ...STATUS_OPTIONS].map((status) => (
+        {["all", ...FILTER_OPTIONS].map((status) => (
           <button
             key={status}
             onClick={() => {
@@ -349,25 +415,90 @@ const Orders = () => {
                           <label className="block text-sm font-semibold text-gray-900">
                             Update status
                           </label>
-                          <select
-                            value={order.status}
-                            disabled={updatingId === order._id}
-                            onChange={(e) =>
-                              handleStatusChange(order._id, e.target.value)
-                            }
-                            className="mt-2 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none disabled:opacity-50"
-                          >
-                            {STATUS_OPTIONS.map((status) => (
-                              <option key={status} value={status}>
-                                {statusLabel(status)}
-                              </option>
-                            ))}
-                          </select>
+                          {isTerminal(order.status) ? (
+                            <p
+                              className={`mt-2 rounded-md px-3 py-2 text-sm ${
+                                statusStyles[order.status] || statusStyles.placed
+                              }`}
+                            >
+                              {statusLabel(order.status)}
+                              {order.status === "cancelled" &&
+                                " — awaiting refund"}
+                              {order.status === "refunded" && " — refund completed"}
+                            </p>
+                          ) : (
+                            <select
+                              value={order.status}
+                              disabled={updatingId === order._id}
+                              onChange={(e) =>
+                                handleStatusChange(order._id, e.target.value)
+                              }
+                              className="mt-2 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                            >
+                              {STATUS_OPTIONS.map((status) => (
+                                <option key={status} value={status}>
+                                  {statusLabel(status)}
+                                </option>
+                              ))}
+                            </select>
+                          )}
                           {updatingId === order._id && (
                             <p className="mt-1 text-xs text-gray-500">
                               Saving...
                             </p>
                           )}
+
+                          {/* Cancellation / refund details */}
+                          {order.cancellation?.cancelledAt && (
+                            <div className="mt-3 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                              <p>
+                                Cancelled by{" "}
+                                <span className="font-medium capitalize">
+                                  {order.cancellation.cancelledBy || "user"}
+                                </span>{" "}
+                                on{" "}
+                                {formatDate(order.cancellation.cancelledAt)}
+                              </p>
+                              {order.cancellation.reason && (
+                                <p className="mt-1">
+                                  Reason: {order.cancellation.reason}
+                                </p>
+                              )}
+                              <p className="mt-1">
+                                Refund:{" "}
+                                <span className="font-medium capitalize">
+                                  {(
+                                    order.cancellation.refundStatus || "pending"
+                                  ).replace("_", " ")}
+                                </span>
+                                {order.cancellation.refundAmount
+                                  ? ` · ${order.cancellation.refundAmount.toFixed(2)}`
+                                  : ""}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* Actions */}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {canCancel(order.status) && (
+                              <button
+                                type="button"
+                                onClick={() => setCancelTarget(order)}
+                                className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                              >
+                                Cancel order
+                              </button>
+                            )}
+                            {canRefund(order) && (
+                              <button
+                                type="button"
+                                onClick={() => setRefundTarget(order)}
+                                className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+                              >
+                                Process refund
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -460,6 +591,25 @@ const Orders = () => {
         </div>
         </>
       )}
+
+      <ConfirmModal
+        open={!!cancelTarget}
+        title="Cancel order"
+        message={`Are you sure you want to cancel order ${cancelTarget?.orderNumber}? Any ordered stock will be returned to inventory and a refund will need to be processed.`}
+        confirmLabel="Yes, cancel order"
+        onConfirm={confirmCancel}
+        onCancel={() => !actionBusy && setCancelTarget(null)}
+      />
+
+      <ConfirmModal
+        open={!!refundTarget}
+        title="Process refund"
+        message={`Process a refund of ${refundTarget?.total?.toFixed(2) ?? ""} for order ${refundTarget?.orderNumber}? This marks the refund as completed.`}
+        confirmLabel="Yes, process refund"
+        tone="green"
+        onConfirm={confirmRefund}
+        onCancel={() => !actionBusy && setRefundTarget(null)}
+      />
     </div>
   );
 };

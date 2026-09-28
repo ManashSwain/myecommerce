@@ -2,9 +2,24 @@ import React from "react";
 import { X } from "lucide-react";
 import { Trash2 } from "lucide-react";
 
-// Confirmation dialog for destructive actions (delete).
-const ConfirmModal = ({ open, title, message, onConfirm, onCancel }) => {
+// Confirmation dialog for destructive actions (delete, cancel, refund).
+// `confirmLabel` and `tone` let callers customise the confirm button;
+// defaults preserve the original delete behaviour.
+const ConfirmModal = ({
+  open,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmLabel = "Yes, delete",
+  tone = "red",
+}) => {
   if (!open) return null;
+
+  const confirmClasses =
+    tone === "green"
+      ? "bg-emerald-600 hover:bg-emerald-700"
+      : "bg-red-600 hover:bg-red-700";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -41,10 +56,10 @@ const ConfirmModal = ({ open, title, message, onConfirm, onCancel }) => {
           <button
             type="button"
             onClick={onConfirm}
-            className="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+            className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white ${confirmClasses}`}
           >
             <Trash2 size={16} />
-            Yes, delete
+            {confirmLabel}
           </button>
         </div>
       </div>

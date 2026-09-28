@@ -20,6 +20,51 @@ const generateOrderNumber = () =>
     Math.random() * 90 + 10
   )}`;
 
+// Statuses where the order has left the warehouse and can no longer be
+// cancelled by the customer.
+const NON_CANCELLABLE_STATUSES = ["shipped", "delivered", "cancelled", "refunded"];
+
+// Put the ordered quantities back into product variant stock. Called when an
+// order is cancelled (the mirror of the decrement done at order time).
+const restockOrderItems = async (order) => {
+  await Promise.all(
+    (order.items || [])
+      .filter((item) => item.product)
+      .map((item) =>
+        Product.updateOne(
+          {
+            _id: item.product,
+            "variants.color": item.color,
+            "variants.size": item.size,
+          },
+          { $inc: { "variants.$.stock": item.quantity } }
+        )
+      )
+  );
+};
+
+// Shared cancellation logic for both customer and admin cancellations.
+// `cancelledBy` is "user" or "admin"; `reason` is optional free text.
+const applyCancellation = async (order, { cancelledBy, reason }) => {
+  order.status = "cancelled";
+  // Money was collected at checkout, so a refund is now owed.
+  order.paymentStatus = "refund_pending";
+  order.cancellation = {
+    cancelledBy,
+    reason: reason || "",
+    cancelledAt: new Date(),
+    refundStatus: "pending",
+    refundAmount: order.total,
+  };
+  await order.save();
+
+  // Return the stock so cancelled items become sellable again.
+  await restockOrderItems(order);
+
+  notifyOrderStatus(order);
+  return order;
+};
+
 // CREATE ORDER (post)
 // Accepts the checkout payload (contact email, shipping address,
 // delivery method) and builds the order from the user's current cart.
@@ -395,6 +440,196 @@ export const updateOrderStatus = async (req, res) => {
       data: order,
     });
   } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// CANCEL MY ORDER (patch) — customer.
+// A customer may cancel only while the order is still "placed" or
+// "processing". Once it has shipped (or been delivered) cancellation is
+// blocked — they must contact support instead.
+export const cancelMyOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { userId, reason } = req.body;
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "userId is required" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    // Only the order's owner can cancel it.
+    if (order.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only cancel your own orders",
+      });
+    }
+
+    if (NON_CANCELLABLE_STATUSES.includes(order.status)) {
+      const pretty =
+        order.status.charAt(0).toUpperCase() + order.status.slice(1);
+      return res.status(400).json({
+        success: false,
+        message:
+          order.status === "shipped" || order.status === "delivered"
+            ? `This order has been ${order.status} and can no longer be cancelled. Please contact support for help.`
+            : `This order is already ${pretty.toLowerCase()} and cannot be cancelled again.`,
+      });
+    }
+
+    const cancelled = await applyCancellation(order, {
+      cancelledBy: "user",
+      reason,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Order cancelled. Your refund will be processed shortly.",
+      data: cancelled,
+    });
+  } catch (err) {
+    console.error("cancelMyOrder error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// CANCEL ORDER (patch) — admin.
+// Admins can cancel an order at any stage before it is delivered, and even
+// recall a shipped order. Terminal states (delivered / already cancelled /
+// refunded) are rejected.
+export const cancelOrderAdmin = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { reason } = req.body;
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    if (["delivered", "cancelled", "refunded"].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `An order that is already ${order.status} cannot be cancelled.`,
+      });
+    }
+
+    const cancelled = await applyCancellation(order, {
+      cancelledBy: "admin",
+      reason,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Order cancelled successfully",
+      data: cancelled,
+    });
+  } catch (err) {
+    console.error("cancelOrderAdmin error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// REFUND ORDER (patch) — admin.
+// Marks a cancelled order's refund as completed. Optionally accepts a
+// refund reference (transaction id) and amount; defaults to the order total.
+export const refundOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { refundReference, amount } = req.body;
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    if (order.status !== "cancelled" && order.status !== "refunded") {
+      return res.status(400).json({
+        success: false,
+        message: "Only a cancelled order can be refunded.",
+      });
+    }
+
+    if (order.cancellation?.refundStatus === "completed") {
+      return res.status(400).json({
+        success: false,
+        message: "This order has already been refunded.",
+      });
+    }
+
+    const refundAmount =
+      amount !== undefined && amount !== null && amount !== ""
+        ? Number(amount)
+        : order.total;
+
+    if (Number.isNaN(refundAmount) || refundAmount < 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Refund amount must be a positive number" });
+    }
+
+    order.status = "refunded";
+    order.paymentStatus = "refunded";
+    order.cancellation = {
+      ...(order.cancellation?.toObject
+        ? order.cancellation.toObject()
+        : order.cancellation || {}),
+      refundStatus: "completed",
+      refundAmount,
+      refundedAt: new Date(),
+      refundReference: refundReference || "",
+    };
+    await order.save();
+
+    notifyOrderStatus(order);
+
+    return res.status(200).json({
+      success: true,
+      message: "Refund processed successfully",
+      data: order,
+    });
+  } catch (err) {
+    console.error("refundOrder error:", err);
     return res.status(500).json({
       success: false,
       message: err.message,

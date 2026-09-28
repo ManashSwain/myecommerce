@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import BackToHome from "./BackToHome";
 import { OrdersSkeleton } from "./Loader";
-import { getOrders } from "../utils/order";
+import { getOrders, cancelOrder } from "../utils/order";
+import {
+  Dialog,
+  DialogBackdrop,
+  DialogPanel,
+  DialogTitle,
+} from "@headlessui/react";
+import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 
 function classNames(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -11,6 +19,9 @@ function classNames(...classes) {
 
 // Ordered tracking steps — index matches the statusStep() value below.
 const STEPS = ["Order placed", "Processing", "Shipped", "Delivered"];
+
+// Terminal statuses do not fit the linear tracker.
+const CANCELLED_STATUSES = ["cancelled", "refunded"];
 
 // Map an order status to the progress bar step (0-3)
 const statusStep = (status) => {
@@ -29,10 +40,21 @@ const statusStep = (status) => {
 const statusLabel = (status) =>
   status ? status.charAt(0).toUpperCase() + status.slice(1) : "Placed";
 
+// A customer may cancel while the order is still placed/processing.
+const canCancel = (status) => status === "placed" || status === "processing";
+
+const formatCurrency = (amount) =>
+  `₹${Number(amount || 0).toLocaleString("en-IN")}`;
+
 const Orders = () => {
   const { isSignedIn, isLoaded, user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Cancellation dialog state
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [reason, setReason] = useState("");
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!isSignedIn || !user?.id) {
@@ -47,6 +69,36 @@ const Orders = () => {
     };
     load();
   }, [isSignedIn, isLoaded, user?.id]);
+
+  const openCancel = (order) => {
+    setCancelTarget(order);
+    setReason("");
+  };
+
+  const closeCancel = () => {
+    if (cancelling) return;
+    setCancelTarget(null);
+    setReason("");
+  };
+
+  const confirmCancel = async () => {
+    if (!cancelTarget) return;
+    setCancelling(true);
+    try {
+      const updated = await cancelOrder(cancelTarget._id, user.id, reason);
+      // Replace the order in-place so the UI updates without a full reload.
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o)),
+      );
+      toast.success("Order cancelled. Your refund is being processed.");
+      setCancelTarget(null);
+      setReason("");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   // Auth still resolving — show a matching skeleton instead of a blank page.
   if (!isLoaded) {
@@ -107,6 +159,7 @@ const Orders = () => {
           <div className="mt-6 space-y-8">
             {orders.map((order) => {
               const step = statusStep(order.status);
+              const isCancelled = CANCELLED_STATUSES.includes(order.status);
               return (
                 <div
                   key={order._id}
@@ -127,10 +180,37 @@ const Orders = () => {
                         </time>
                       </p>
                     </div>
-                    <p className="text-base font-medium text-gray-900">
-                      ${order.total.toFixed(2)}
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={classNames(
+                          "rounded-full px-2.5 py-1 text-xs font-medium",
+                          order.status === "cancelled" &&
+                            "bg-red-50 text-red-700",
+                          order.status === "refunded" &&
+                            "bg-emerald-50 text-emerald-700",
+                          !isCancelled && "bg-indigo-50 text-indigo-700",
+                        )}
+                      >
+                        {statusLabel(order.status)}
+                      </span>
+                      <p className="text-base font-medium text-gray-900">
+                        {formatCurrency(order.total)}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* Cancellation / refund notice */}
+                  {isCancelled && (
+                    <div className="border-b border-gray-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:px-6">
+                      {order.status === "refunded"
+                        ? `This order was cancelled and a refund of ${formatCurrency(
+                            order.cancellation?.refundAmount ?? order.total,
+                          )} has been processed.`
+                        : `This order was cancelled. A refund of ${formatCurrency(
+                            order.cancellation?.refundAmount ?? order.total,
+                          )} is being processed.`}
+                    </div>
+                  )}
 
                   <div className="px-4 py-6 sm:px-6 lg:grid lg:grid-cols-12 lg:gap-x-8 lg:p-8">
                     <div className="lg:col-span-7">
@@ -156,7 +236,7 @@ const Orders = () => {
                                   </Link>
                                 </h4>
                                 <p className="text-sm font-medium text-gray-900">
-                                  ${(item.price * item.quantity).toFixed(2)}
+                                  {formatCurrency(item.price * item.quantity)}
                                 </p>
                               </div>
                               <p className="mt-1 text-sm text-gray-500">
@@ -209,44 +289,63 @@ const Orders = () => {
                   </div>
 
                   <div className="border-t border-gray-200 px-4 py-6 sm:px-6 lg:p-8">
-                    <h4 className="sr-only">Status</h4>
-                    <p className="text-sm font-medium text-gray-900">
-                      {statusLabel(order.status)}
-                    </p>
-                    <div aria-hidden="true" className="mt-6">
-                      {/*
-                        The track and its 4 labels share the same 4 anchor
-                        points (0%, 33.3%, 66.6%, 100%) so the fill always ends
-                        exactly under the active label. `justify-between` puts
-                        the first label at the left edge and the last at the
-                        right edge, matching the fill's start/end.
-                      */}
-                      <div className="relative">
-                        <div className="overflow-hidden rounded-full bg-gray-200">
-                          <div
-                            style={{ width: `${(step / (STEPS.length - 1)) * 100}%` }}
-                            className="h-2 rounded-full bg-indigo-600 transition-all duration-300"
-                          />
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h4 className="sr-only">Status</h4>
+                      <p className="text-sm font-medium text-gray-900">
+                        {statusLabel(order.status)}
+                      </p>
+
+                      {/* Cancel button — only while the order can still be cancelled */}
+                      {canCancel(order.status) ? (
+                        <button
+                          type="button"
+                          onClick={() => openCancel(order)}
+                          className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                        >
+                          Cancel order
+                        </button>
+                      ) : (
+                        order.status === "shipped" && (
+                          <p className="text-xs text-gray-500">
+                            This order has shipped and can no longer be
+                            cancelled. Contact support for help.
+                          </p>
+                        )
+                      )}
+                    </div>
+
+                    {/* Tracking bar (hidden for cancelled/refunded orders) */}
+                    {!isCancelled && (
+                      <div aria-hidden="true" className="mt-6">
+                        <div className="relative">
+                          <div className="overflow-hidden rounded-full bg-gray-200">
+                            <div
+                              style={{
+                                width: `${(step / (STEPS.length - 1)) * 100}%`,
+                              }}
+                              className="h-2 rounded-full bg-indigo-600 transition-all duration-300"
+                            />
+                          </div>
+                        </div>
+                        <div className="mt-6 hidden text-sm font-medium text-gray-600 sm:flex sm:justify-between">
+                          {STEPS.map((label, index) => (
+                            <div
+                              key={label}
+                              className={classNames(
+                                step >= index ? "text-indigo-600" : "",
+                                index === 0
+                                  ? "text-left"
+                                  : index === STEPS.length - 1
+                                    ? "text-right"
+                                    : "text-center",
+                              )}
+                            >
+                              {label}
+                            </div>
+                          ))}
                         </div>
                       </div>
-                      <div className="mt-6 hidden text-sm font-medium text-gray-600 sm:flex sm:justify-between">
-                        {STEPS.map((label, index) => (
-                          <div
-                            key={label}
-                            className={classNames(
-                              step >= index ? "text-indigo-600" : "",
-                              index === 0
-                                ? "text-left"
-                                : index === STEPS.length - 1
-                                  ? "text-right"
-                                  : "text-center",
-                            )}
-                          >
-                            {label}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </div>
               );
@@ -254,6 +353,82 @@ const Orders = () => {
           </div>
         )}
       </div>
+
+      {/* Cancel confirmation dialog */}
+      <Dialog
+        open={!!cancelTarget}
+        onClose={closeCancel}
+        className="relative z-10"
+      >
+        <DialogBackdrop
+          transition
+          className="fixed inset-0 bg-gray-500/75 transition-opacity data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in"
+        />
+        <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
+          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+            <DialogPanel
+              transition
+              className="relative transform overflow-hidden rounded-lg bg-white px-4 pt-5 pb-4 text-left shadow-xl transition-all data-closed:translate-y-4 data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in sm:my-8 sm:w-full sm:max-w-lg sm:p-6 data-closed:sm:translate-y-0 data-closed:sm:scale-95"
+            >
+              <div className="sm:flex sm:items-start">
+                <div className="mx-auto flex size-12 shrink-0 items-center justify-center rounded-full bg-red-100 sm:mx-0 sm:size-10">
+                  <ExclamationTriangleIcon
+                    aria-hidden="true"
+                    className="size-6 text-red-600"
+                  />
+                </div>
+                <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                  <DialogTitle
+                    as="h3"
+                    className="text-base font-semibold text-gray-900"
+                  >
+                    Cancel order {cancelTarget?.orderNumber}
+                  </DialogTitle>
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-500">
+                      Are you sure you want to cancel this order? A refund of{" "}
+                      {formatCurrency(cancelTarget?.total)} will be processed to
+                      your original payment method. This can't be undone.
+                    </p>
+                    <label
+                      htmlFor="cancel-reason"
+                      className="mt-4 block text-sm font-medium text-gray-700"
+                    >
+                      Reason (optional)
+                    </label>
+                    <textarea
+                      id="cancel-reason"
+                      rows={2}
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      placeholder="Tell us why you're cancelling"
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  disabled={cancelling}
+                  onClick={confirmCancel}
+                  className="inline-flex w-full justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-3 sm:w-auto"
+                >
+                  {cancelling ? "Cancelling..." : "Yes, cancel order"}
+                </button>
+                <button
+                  type="button"
+                  disabled={cancelling}
+                  onClick={closeCancel}
+                  className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 inset-ring inset-ring-gray-300 hover:bg-gray-50 disabled:opacity-60 sm:mt-0 sm:w-auto"
+                >
+                  Keep order
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </div>
+      </Dialog>
     </div>
   );
 };

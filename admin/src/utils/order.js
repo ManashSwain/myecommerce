@@ -26,3 +26,32 @@ export const updateOrderStatus = async (orderId, status) => {
   }
   return json.data;
 };
+
+// Admin cancels any order that hasn't reached a terminal state.
+export const cancelOrderAdmin = async (orderId, reason) => {
+  const res = await fetch(`${API_BASE_URL}/api/order/admin/cancel/${orderId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason }),
+  });
+  const json = await res.json();
+  if (!res.ok || json.success === false) {
+    throw new Error(json.message || "Could not cancel the order");
+  }
+  return json.data;
+};
+
+// Admin processes the refund for a cancelled order. Optional transaction
+// reference is stored on the order.
+export const refundOrderAdmin = async (orderId, refundReference = "") => {
+  const res = await fetch(`${API_BASE_URL}/api/order/admin/refund/${orderId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refundReference }),
+  });
+  const json = await res.json();
+  if (!res.ok || json.success === false) {
+    throw new Error(json.message || "Could not process the refund");
+  }
+  return json.data;
+};
