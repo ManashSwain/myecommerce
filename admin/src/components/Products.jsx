@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { StarIcon } from "@heroicons/react/20/solid";
+import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "react-toastify";
 import FormModal from "./FormModal";
@@ -52,6 +53,7 @@ const Products = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   const slugTouched = useRef(false);
 
   const fetchProducts = async () => {
@@ -86,6 +88,26 @@ const Products = () => {
     fetchProducts();
     fetchOptions();
   }, []);
+
+  // Filter products by a search term across title, slug, description and
+  // the (possibly populated) category/subcategory names.
+  const filteredProducts = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return products;
+    return products.filter((product) =>
+      [
+        product.title,
+        product.slug,
+        product.description,
+        product.category?.name || product.category,
+        product.subcategory?.name || product.subcategory,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(term)
+    );
+  }, [products, search]);
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -281,6 +303,28 @@ const Products = () => {
             <Plus size={16} />
             Add Product
           </button>
+        </div>
+
+        {/* Search */}
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <div className="relative w-full sm:max-w-xs">
+            <MagnifyingGlassIcon
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-gray-400"
+            />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search products by title, slug or description"
+              className="block w-full rounded-md border border-gray-300 bg-white py-2 pr-3 pl-10 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          {search.trim() && (
+            <p className="shrink-0 text-sm text-gray-500">
+              {filteredProducts.length} of {products.length} shown
+            </p>
+          )}
         </div>
 
         {error && (
@@ -594,7 +638,7 @@ const Products = () => {
           <ProductGridSkeleton />
         ) : (
         <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4 lg:gap-x-8">
-          {products.map((product) => (
+          {filteredProducts.map((product) => (
             <div key={product._id} className="group relative">
               <div className="relative">
                 {product.images?.[0] && (
@@ -668,6 +712,12 @@ const Products = () => {
         {!loading && products.length === 0 && (
           <p className="mt-6 text-sm text-gray-500">
             No products yet. Click "Add Product" to create one.
+          </p>
+        )}
+
+        {!loading && products.length > 0 && filteredProducts.length === 0 && (
+          <p className="mt-6 text-sm text-gray-500">
+            No products match "{search.trim()}".
           </p>
         )}
       </div>
