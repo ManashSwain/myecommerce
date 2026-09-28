@@ -11,6 +11,7 @@ import Categories from "./components/Categories";
 import Subcategories from "./components/Subcategories";
 import Products from "./components/Products";
 import Orders from "./components/Orders";
+import Dashboard from "./components/Dashboard";
 import Toast from "./components/Toast";
 
 const router = createBrowserRouter([
@@ -18,7 +19,7 @@ const router = createBrowserRouter([
     path: "/",
     element: <RootLayout />,
     children: [
-      { index: true, element: <div>Dashboard</div> },
+      { index: true, element: <Dashboard /> },
       { path: "users", element: <Users /> },
       { path: "categories", element: <Categories/>},
       { path: "sub-categories", element: <Subcategories/>},

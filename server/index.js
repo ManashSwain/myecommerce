@@ -23,6 +23,7 @@ import cartrouter from "./src/Routes/cart.route.js"
 import orderrouter from "./src/Routes/order.route.js"
 import newsletterrouter from "./src/Routes/newsletter.route.js"
 import wishlistRouter from "./src/Routes/wishlist.route.js";
+import analyticsrouter from "./src/Routes/analytics.route.js";
 
 // DNS SETUP
 import dns from "dns";
@@ -57,6 +58,8 @@ app.use("/api/order",orderrouter)
 app.use("/api/newsletter",newsletterrouter);
 // wishlist middleware
 app.use("/api/wishlist", wishlistRouter);
+// analytics middleware (admin dashboard)
+app.use("/api/analytics", analyticsrouter);
 
 // multer + cloudinary route
 app.post("/photos/upload", upload.array('photos'), async (req,res,next)=>{

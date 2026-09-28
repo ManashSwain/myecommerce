@@ -44,6 +44,42 @@ export const ProductGridSkeleton = ({ count = 8 }) => (
   </div>
 );
 
+// Skeleton for the analytics dashboard (stat cards + chart panels).
+// Mirrors components/Dashboard.jsx.
+export const DashboardSkeleton = () => (
+  <div className="py-8">
+    <Skeleton className="h-7 w-48" />
+    <Skeleton className="mt-2 h-4 w-72" />
+    <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="rounded-lg border border-gray-200 bg-white p-5">
+          <Skeleton className="h-3 w-24" />
+          <Skeleton className="mt-3 h-7 w-32" />
+          <Skeleton className="mt-2 h-3 w-20" />
+        </div>
+      ))}
+    </div>
+    <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="rounded-lg border border-gray-200 bg-white p-5 lg:col-span-2">
+        <Skeleton className="h-4 w-40" />
+        <Skeleton className="mt-4 h-72 w-full" />
+      </div>
+      <div className="rounded-lg border border-gray-200 bg-white p-5">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="mt-4 h-72 w-full" />
+      </div>
+    </div>
+    <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+      {Array.from({ length: 2 }).map((_, i) => (
+        <div key={i} className="rounded-lg border border-gray-200 bg-white p-5">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="mt-4 h-64 w-full" />
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
 // Skeleton for the Categories / Sub Categories grid (2/4 columns, tall image).
 // Mirrors components/CategoryManager.jsx.
 export const CategoryGridSkeleton = ({ count = 8 }) => (
