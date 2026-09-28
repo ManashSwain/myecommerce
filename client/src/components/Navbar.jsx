@@ -402,13 +402,23 @@ const Navbar = () => {
                         Shipping and taxes calculated at checkout.
                       </p>
                       <div className="mt-6">
-                        <Link
-                          to="/checkout"
-                          onClick={() => setcartstate(false)}
-                          className="flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-xs hover:bg-indigo-700"
-                        >
-                          Checkout
-                        </Link>
+                        {cartItems.length === 0 ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="flex w-full cursor-not-allowed items-center justify-center rounded-md border border-transparent bg-indigo-600 px-6 py-3 text-base font-medium text-white opacity-50 shadow-xs"
+                          >
+                            Checkout
+                          </button>
+                        ) : (
+                          <Link
+                            to="/checkout"
+                            onClick={() => setcartstate(false)}
+                            className="flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-6 py-3 text-base font-medium text-white shadow-xs hover:bg-indigo-700"
+                          >
+                            Checkout
+                          </Link>
+                        )}
                       </div>
                       <div className="mt-6 flex justify-center text-center text-sm text-gray-500">
                         <p>
