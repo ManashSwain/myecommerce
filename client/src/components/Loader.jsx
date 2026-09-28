@@ -35,6 +35,26 @@ export const ProductGridSkeleton = ({ count = 8 }) => (
   </div>
 );
 
+// Skeleton for the category product grid (1 / 2 / 3 columns, tall images).
+// Mirrors the layout in components/Categoryfilters.jsx.
+export const CategoryGridSkeleton = ({ count = 6 }) => (
+  <div className="grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className="group relative">
+        <Skeleton className="aspect-square w-full lg:aspect-auto lg:h-80" />
+        <div className="mt-4 flex justify-between">
+          <div className="flex-1">
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="mt-2 h-3 w-1/3" />
+            <Skeleton className="mt-2 h-3 w-1/4" />
+          </div>
+          <Skeleton className="h-4 w-12" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
 // Skeleton for the saved-addresses card grid (1/2/3 columns).
 export const CardGridSkeleton = ({ count = 6 }) => (
   <div className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">

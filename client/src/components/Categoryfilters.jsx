@@ -11,6 +11,7 @@ import {
 import { ArrowLeftIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { FunnelIcon, MinusIcon, PlusIcon } from "@heroicons/react/20/solid";
 import { toast } from "react-toastify";
+import { CategoryGridSkeleton } from "./Loader";
 import { API_BASE_URL } from "../constants";
 
 const slugify = (text) =>
@@ -318,7 +319,7 @@ const Categoryfilters = () => {
               {/* Product grid */}
               <div className="lg:col-span-3">
                 {loading ? (
-                  <p className="text-sm text-gray-500">Loading products...</p>
+                  <CategoryGridSkeleton />
                 ) : !category ? (
                   <p className="text-sm text-gray-500">
                     This category could not be found.
