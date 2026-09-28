@@ -38,14 +38,15 @@ const STATUS_COLORS = {
   delivered: "#059669",
 };
 
+// Amounts are in Indian Rupees to match the storefront (cart/checkout use ₹).
 const money = (value) =>
-  `$${Number(value || 0).toLocaleString(undefined, {
+  `₹${Number(value || 0).toLocaleString("en-IN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
 
 const compact = (value) =>
-  `$${Number(value || 0).toLocaleString(undefined, {
+  `₹${Number(value || 0).toLocaleString("en-IN", {
     notation: "compact",
     maximumFractionDigits: 1,
   })}`;
@@ -125,7 +126,7 @@ const Dashboard = () => {
 
   return (
     <div className="py-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">
             Dashboard
