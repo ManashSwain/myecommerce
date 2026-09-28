@@ -58,6 +58,45 @@ export const receiveReturnAdmin = async (orderId) => {
   return json.data;
 };
 
+// Admin dispatches a replacement: a new unit is shipped and one is taken out
+// of stock. No money involved.
+export const dispatchReplacementAdmin = async (orderId, note = "") => {
+  const res = await fetch(
+    `${API_BASE_URL}/api/order/admin/replacement/dispatch/${orderId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note }),
+    }
+  );
+  const json = await res.json();
+  if (!res.ok || json.success === false) {
+    throw new Error(json.message || "Could not dispatch the replacement");
+  }
+  return json.data;
+};
+
+// Admin completes a replacement: the original item is received back and
+// (optionally) restocked. No money involved.
+export const completeReplacementAdmin = async (
+  orderId,
+  { note = "", resellable = true } = {}
+) => {
+  const res = await fetch(
+    `${API_BASE_URL}/api/order/admin/replacement/complete/${orderId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note, resellable }),
+    }
+  );
+  const json = await res.json();
+  if (!res.ok || json.success === false) {
+    throw new Error(json.message || "Could not complete the replacement");
+  }
+  return json.data;
+};
+
 // Admin processes the refund for a cancelled order. Optional transaction
 // reference is stored on the order.
 export const refundOrderAdmin = async (orderId, refundReference = "") => {

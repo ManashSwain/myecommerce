@@ -117,6 +117,8 @@ const orderSchema = new mongoose.Schema(
     //   shipped cancelled            → return_in_transit (stock back only when
     //                                   the item physically reaches the store)
     // Refund finishes an order: cancelled/return_in_transit → refunded
+    // Replacement (exchange, no money) — only for delivered orders:
+    //   delivered → replacement_requested → replacement_out → replacement_completed
     status: {
       type: String,
       enum: [
@@ -127,6 +129,9 @@ const orderSchema = new mongoose.Schema(
         "return_in_transit",
         "cancelled",
         "refunded",
+        "replacement_requested",
+        "replacement_out",
+        "replacement_completed",
       ],
       default: "placed",
     },
@@ -184,6 +189,50 @@ const orderSchema = new mongoose.Schema(
         type: Date,
       },
       refundReference: {
+        type: String,
+      },
+    },
+
+    // Replacement / exchange flow. NO money is involved — a brand-new unit is
+    // sent out for the returned/defective one. Kept separate from
+    // `cancellation` so the two flows never interfere.
+    //   requested → approved/dispatched → received (faulty) → completed
+    replacement: {
+      // Who kicked it off. Customers raise requests; admins can too.
+      requestedBy: {
+        type: String,
+        enum: ["user", "admin"],
+      },
+      reason: {
+        type: String,
+      },
+      requestedAt: {
+        type: Date,
+      },
+      // Admin action: the replacement unit has been dispatched.
+      approvedAt: {
+        type: Date,
+      },
+      // True once a fresh unit has been taken out of inventory for the
+      // replacement (to keep stock honest).
+      replacementStockDeducted: {
+        type: Boolean,
+        default: false,
+      },
+      // Set when the faulty / original unit arrives back at the store. The
+      // unit is restocked at this point (if sellable).
+      returnedAt: {
+        type: Date,
+      },
+      stockRestored: {
+        type: Boolean,
+        default: false,
+      },
+      completedAt: {
+        type: Date,
+      },
+      // Admin note (e.g. courier details / condition on arrival).
+      note: {
         type: String,
       },
     },

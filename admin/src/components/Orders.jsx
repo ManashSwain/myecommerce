@@ -4,6 +4,8 @@ import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { toast } from "react-toastify";
 import {
   cancelOrderAdmin,
+  completeReplacementAdmin,
+  dispatchReplacementAdmin,
   getAllOrders,
   receiveReturnAdmin,
   refundOrderAdmin,
@@ -23,6 +25,9 @@ const FILTER_OPTIONS = [
   "return_in_transit",
   "cancelled",
   "refunded",
+  "replacement_requested",
+  "replacement_out",
+  "replacement_completed",
 ];
 
 // Colours for the status pill
@@ -34,10 +39,16 @@ const statusStyles = {
   return_in_transit: "bg-sky-100 text-sky-700",
   cancelled: "bg-red-100 text-red-700",
   refunded: "bg-emerald-100 text-emerald-700",
+  replacement_requested: "bg-violet-100 text-violet-700",
+  replacement_out: "bg-violet-100 text-violet-700",
+  replacement_completed: "bg-violet-100 text-violet-700",
 };
 
 const STATUS_LABELS = {
   return_in_transit: "Return in transit",
+  replacement_requested: "Replacement requested",
+  replacement_out: "Replacement dispatched",
+  replacement_completed: "Replacement completed",
 };
 const statusLabel = (status) => {
   if (!status) return "Placed";
@@ -45,16 +56,27 @@ const statusLabel = (status) => {
   return status.charAt(0).toUpperCase() + status.slice(1);
 };
 
-// Terminal states can't be cancelled any further (return_in_transit still
-// needs a "receive return" action, so it is NOT terminal).
+// Terminal states can't be cancelled any further. return_in_transit (needs
+// receive) and the replacement states are handled by their own actions, so
+// none of them are "terminal" for the generic cancel button.
 const isTerminal = (status) =>
   ["delivered", "cancelled", "refunded"].includes(status);
-const canCancel = (status) => !isTerminal(status) && status !== "return_in_transit";
+// The status dropdown must never be shown for a non-linear state.
+const isReplacement = (status) =>
+  typeof status === "string" && status.startsWith("replacement");
+const isLockedStatus = (status) =>
+  isTerminal(status) || status === "return_in_transit" || isReplacement(status);
+
+const canCancel = (status) =>
+  !isTerminal(status) && status !== "return_in_transit" && !isReplacement(status);
 // A return-in-transit order needs to be received before it can be refunded.
 const canReceiveReturn = (status) => status === "return_in_transit";
 const canRefund = (order) =>
   order.status === "cancelled" &&
   order.cancellation?.refundStatus !== "completed";
+// Replacement actions.
+const canDispatchReplacement = (status) => status === "replacement_requested";
+const canCompleteReplacement = (status) => status === "replacement_out";
 
 const formatDate = (value) =>
   new Date(value).toLocaleDateString(undefined, {
@@ -149,11 +171,49 @@ const Orders = () => {
     }
   };
 
-  // Cancel + receive-return + refund flow
+  // Cancel + receive-return + refund + replacement flow
   const [cancelTarget, setCancelTarget] = useState(null);
   const [returnTarget, setReturnTarget] = useState(null);
   const [refundTarget, setRefundTarget] = useState(null);
+  const [dispatchTarget, setDispatchTarget] = useState(null);
+  const [completeTarget, setCompleteTarget] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
+
+  const confirmDispatchReplacement = async () => {
+    if (!dispatchTarget) return;
+    setActionBusy(true);
+    try {
+      const updated = await dispatchReplacementAdmin(dispatchTarget._id);
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o))
+      );
+      toast.success(
+        `Replacement dispatched for ${updated.orderNumber} — stock deducted`
+      );
+      setDispatchTarget(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const confirmCompleteReplacement = async () => {
+    if (!completeTarget) return;
+    setActionBusy(true);
+    try {
+      const updated = await completeReplacementAdmin(completeTarget._id);
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o))
+      );
+      toast.success(`Replacement completed for ${updated.orderNumber}`);
+      setCompleteTarget(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const confirmReceiveReturn = async () => {
     if (!returnTarget) return;
@@ -447,7 +507,7 @@ const Orders = () => {
                           <label className="block text-sm font-semibold text-gray-900">
                             Update status
                           </label>
-                          {isTerminal(order.status) || canReceiveReturn(order.status) ? (
+                          {isLockedStatus(order.status) ? (
                             <p
                               className={`mt-2 rounded-md px-3 py-2 text-sm ${
                                 statusStyles[order.status] || statusStyles.placed
@@ -459,6 +519,12 @@ const Orders = () => {
                               {order.status === "cancelled" &&
                                 " — awaiting refund"}
                               {order.status === "refunded" && " — refund completed"}
+                              {order.status === "replacement_requested" &&
+                                " — needs dispatch"}
+                              {order.status === "replacement_out" &&
+                                " — awaiting return"}
+                              {order.status === "replacement_completed" &&
+                                " — exchange closed"}
                             </p>
                           ) : (
                             <select
@@ -528,6 +594,46 @@ const Orders = () => {
                             </div>
                           )}
 
+                          {/* Replacement details (no money involved) */}
+                          {order.replacement?.requestedAt && (
+                            <div className="mt-3 rounded-md bg-violet-50 px-3 py-2 text-xs text-violet-800">
+                              <p>
+                                Replacement requested by{" "}
+                                <span className="font-medium capitalize">
+                                  {order.replacement.requestedBy || "user"}
+                                </span>{" "}
+                                on {formatDate(order.replacement.requestedAt)}
+                              </p>
+                              {order.replacement.reason && (
+                                <p className="mt-1">
+                                  Reason: {order.replacement.reason}
+                                </p>
+                              )}
+                              {order.replacement.approvedAt && (
+                                <p className="mt-1">
+                                  Dispatched:{" "}
+                                  {formatDate(order.replacement.approvedAt)} ·
+                                  stock {order.replacement.replacementStockDeducted
+                                    ? "deducted"
+                                    : "not deducted"}
+                                </p>
+                              )}
+                              {order.replacement.completedAt && (
+                                <p className="mt-1">
+                                  Completed:{" "}
+                                  {formatDate(order.replacement.completedAt)} ·
+                                  original unit{" "}
+                                  {order.replacement.stockRestored
+                                    ? "restocked"
+                                    : "not restocked"}
+                                </p>
+                              )}
+                              <p className="mt-1 font-medium">
+                                No payment involved (exchange).
+                              </p>
+                            </div>
+                          )}
+
                           {/* Actions */}
                           <div className="mt-3 flex flex-wrap gap-2">
                             {canCancel(order.status) && (
@@ -555,6 +661,24 @@ const Orders = () => {
                                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
                               >
                                 Process refund
+                              </button>
+                            )}
+                            {canDispatchReplacement(order.status) && (
+                              <button
+                                type="button"
+                                onClick={() => setDispatchTarget(order)}
+                                className="rounded-md bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700"
+                              >
+                                Dispatch replacement
+                              </button>
+                            )}
+                            {canCompleteReplacement(order.status) && (
+                              <button
+                                type="button"
+                                onClick={() => setCompleteTarget(order)}
+                                className="rounded-md bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-700"
+                              >
+                                Complete replacement
                               </button>
                             )}
                           </div>
@@ -678,6 +802,25 @@ const Orders = () => {
         tone="green"
         onConfirm={confirmRefund}
         onCancel={() => !actionBusy && setRefundTarget(null)}
+      />
+
+      <ConfirmModal
+        open={!!dispatchTarget}
+        title="Dispatch replacement"
+        message={`Send a new unit for order ${dispatchTarget?.orderNumber}? This takes a replacement unit out of stock. No payment is involved.`}
+        confirmLabel="Yes, dispatch replacement"
+        onConfirm={confirmDispatchReplacement}
+        onCancel={() => !actionBusy && setDispatchTarget(null)}
+      />
+
+      <ConfirmModal
+        open={!!completeTarget}
+        title="Complete replacement"
+        message={`Mark the replacement for order ${completeTarget?.orderNumber} as complete and restock the returned original unit?`}
+        confirmLabel="Yes, complete replacement"
+        tone="green"
+        onConfirm={confirmCompleteReplacement}
+        onCancel={() => !actionBusy && setCompleteTarget(null)}
       />
     </div>
   );

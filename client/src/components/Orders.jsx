@@ -4,14 +4,17 @@ import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import BackToHome from "./BackToHome";
 import { OrdersSkeleton } from "./Loader";
-import { getOrders, cancelOrder } from "../utils/order";
+import { getOrders, cancelOrder, requestReplacement } from "../utils/order";
 import {
   Dialog,
   DialogBackdrop,
   DialogPanel,
   DialogTitle,
 } from "@headlessui/react";
-import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import {
+  ExclamationTriangleIcon,
+  ArrowsRightLeftIcon,
+} from "@heroicons/react/24/outline";
 
 function classNames(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -23,6 +26,17 @@ const STEPS = ["Order placed", "Processing", "Shipped", "Delivered"];
 // Orders that have left the linear placed→delivered track hide the progress
 // bar and show a notice instead.
 const CANCELLED_STATUSES = ["return_in_transit", "cancelled", "refunded"];
+
+// Replacement (exchange) flow — no money changes hands.
+const REPLACEMENT_ACTIVE_STATUSES = [
+  "replacement_requested",
+  "replacement_out",
+  "replacement_completed",
+];
+// Whether the customer can start a replacement (delivered, and not already
+// in a replacement flow).
+const canRequestReplacement = (order) =>
+  order.status === "delivered";
 
 // Map an order status to the progress bar step (0-3)
 const statusStep = (status) => {
@@ -40,6 +54,9 @@ const statusStep = (status) => {
 
 const STATUS_LABELS = {
   return_in_transit: "Returning to us",
+  replacement_requested: "Replacement requested",
+  replacement_out: "Replacement on its way",
+  replacement_completed: "Replacement completed",
 };
 const statusLabel = (status) => {
   if (!status) return "Placed";
@@ -62,6 +79,11 @@ const Orders = () => {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [reason, setReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
+
+  // Replacement dialog state
+  const [replaceTarget, setReplaceTarget] = useState(null);
+  const [replaceReason, setReplaceReason] = useState("");
+  const [replacing, setReplacing] = useState(false);
 
   useEffect(() => {
     if (!isSignedIn || !user?.id) {
@@ -104,6 +126,41 @@ const Orders = () => {
       toast.error(err.message);
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const openReplace = (order) => {
+    setReplaceTarget(order);
+    setReplaceReason("");
+  };
+
+  const closeReplace = () => {
+    if (replacing) return;
+    setReplaceTarget(null);
+    setReplaceReason("");
+  };
+
+  const confirmReplace = async () => {
+    if (!replaceTarget) return;
+    setReplacing(true);
+    try {
+      const updated = await requestReplacement(
+        replaceTarget._id,
+        user.id,
+        replaceReason,
+      );
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o)),
+      );
+      toast.success(
+        "Replacement requested. We'll arrange pickup of your item.",
+      );
+      setReplaceTarget(null);
+      setReplaceReason("");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setReplacing(false);
     }
   };
 
@@ -167,6 +224,12 @@ const Orders = () => {
             {orders.map((order) => {
               const step = statusStep(order.status);
               const isCancelled = CANCELLED_STATUSES.includes(order.status);
+              const isReplacement = REPLACEMENT_ACTIVE_STATUSES.includes(
+                order.status,
+              );
+              // Either a cancellation-family or replacement-family state hides
+              // the linear delivery tracker.
+              const hideTracker = isCancelled || isReplacement;
               return (
                 <div
                   key={order._id}
@@ -197,7 +260,8 @@ const Orders = () => {
                             "bg-red-50 text-red-700",
                           order.status === "refunded" &&
                             "bg-emerald-50 text-emerald-700",
-                          !isCancelled && "bg-indigo-50 text-indigo-700",
+                          isReplacement && "bg-violet-50 text-violet-700",
+                          !hideTracker && "bg-indigo-50 text-indigo-700",
                         )}
                       >
                         {statusLabel(order.status)}
@@ -208,7 +272,7 @@ const Orders = () => {
                     </div>
                   </div>
 
-                  {/* Returning / cancellation / refund notice */}
+                  {/* Returning / cancellation / refund / replacement notice */}
                   {isCancelled && (
                     <div
                       className={classNames(
@@ -229,6 +293,18 @@ const Orders = () => {
                           : `This order was cancelled. A refund of ${formatCurrency(
                               order.cancellation?.refundAmount ?? order.total,
                             )} is being processed.`}
+                    </div>
+                  )}
+
+                  {/* Replacement (exchange) notice — no money involved */}
+                  {isReplacement && (
+                    <div className="border-b border-gray-200 bg-violet-50 px-4 py-3 text-sm text-violet-800 sm:px-6">
+                      {order.status === "replacement_requested" &&
+                        "Replacement requested. We're reviewing your request and will arrange a pickup — no payment is involved."}
+                      {order.status === "replacement_out" &&
+                        "A replacement unit is on its way. Once your original item reaches us we'll close out the exchange."}
+                      {order.status === "replacement_completed" &&
+                        "Replacement completed. No payment was taken for this exchange."}
                     </div>
                   )}
 
@@ -315,27 +391,40 @@ const Orders = () => {
                         {statusLabel(order.status)}
                       </p>
 
-                      {/* Cancel button — only while the order can still be cancelled */}
-                      {canCancel(order.status) ? (
-                        <button
-                          type="button"
-                          onClick={() => openCancel(order)}
-                          className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
-                        >
-                          Cancel order
-                        </button>
-                      ) : (
-                        order.status === "shipped" && (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Cancel button — only while the order can still be cancelled */}
+                        {canCancel(order.status) && (
+                          <button
+                            type="button"
+                            onClick={() => openCancel(order)}
+                            className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                          >
+                            Cancel order
+                          </button>
+                        )}
+
+                        {/* Replacement — delivered orders only */}
+                        {canRequestReplacement(order) && (
+                          <button
+                            type="button"
+                            onClick={() => openReplace(order)}
+                            className="rounded-md border border-violet-300 px-3 py-1.5 text-sm font-medium text-violet-700 hover:bg-violet-50"
+                          >
+                            Request replacement
+                          </button>
+                        )}
+
+                        {order.status === "shipped" && (
                           <p className="text-xs text-gray-500">
                             This order has shipped and can no longer be
                             cancelled. Contact support for help.
                           </p>
-                        )
                       )}
+                      </div>
                     </div>
 
-                    {/* Tracking bar (hidden for cancelled/refunded orders) */}
-                    {!isCancelled && (
+                    {/* Tracking bar (hidden for cancelled/replacement orders) */}
+                    {!hideTracker && (
                       <div aria-hidden="true" className="mt-6">
                         <div className="relative">
                           <div className="overflow-hidden rounded-full bg-gray-200">
@@ -443,6 +532,82 @@ const Orders = () => {
                   className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 inset-ring inset-ring-gray-300 hover:bg-gray-50 disabled:opacity-60 sm:mt-0 sm:w-auto"
                 >
                   Keep order
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Replacement request dialog */}
+      <Dialog
+        open={!!replaceTarget}
+        onClose={closeReplace}
+        className="relative z-10"
+      >
+        <DialogBackdrop
+          transition
+          className="fixed inset-0 bg-gray-500/75 transition-opacity data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in"
+        />
+        <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
+          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+            <DialogPanel
+              transition
+              className="relative transform overflow-hidden rounded-lg bg-white px-4 pt-5 pb-4 text-left shadow-xl transition-all data-closed:translate-y-4 data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in sm:my-8 sm:w-full sm:max-w-lg sm:p-6 data-closed:sm:translate-y-0 data-closed:sm:scale-95"
+            >
+              <div className="sm:flex sm:items-start">
+                <div className="mx-auto flex size-12 shrink-0 items-center justify-center rounded-full bg-violet-100 sm:mx-0 sm:size-10">
+                  <ArrowsRightLeftIcon
+                    aria-hidden="true"
+                    className="size-6 text-violet-600"
+                  />
+                </div>
+                <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                  <DialogTitle
+                    as="h3"
+                    className="text-base font-semibold text-gray-900"
+                  >
+                    Request replacement for {replaceTarget?.orderNumber}
+                  </DialogTitle>
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-500">
+                      We'll send you a new unit of the same items and arrange a
+                      pickup for your original order. <strong>No payment is
+                      involved.</strong>
+                    </p>
+                    <label
+                      htmlFor="replace-reason"
+                      className="mt-4 block text-sm font-medium text-gray-700"
+                    >
+                      Reason (optional)
+                    </label>
+                    <textarea
+                      id="replace-reason"
+                      rows={2}
+                      value={replaceReason}
+                      onChange={(e) => setReplaceReason(e.target.value)}
+                      placeholder="e.g. wrong size received, item defective"
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  disabled={replacing}
+                  onClick={confirmReplace}
+                  className="inline-flex w-full justify-center rounded-md bg-violet-600 px-3 py-2 text-sm font-semibold text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-3 sm:w-auto"
+                >
+                  {replacing ? "Requesting..." : "Yes, request replacement"}
+                </button>
+                <button
+                  type="button"
+                  disabled={replacing}
+                  onClick={closeReplace}
+                  className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 inset-ring inset-ring-gray-300 hover:bg-gray-50 disabled:opacity-60 sm:mt-0 sm:w-auto"
+                >
+                  Cancel
                 </button>
               </div>
             </DialogPanel>

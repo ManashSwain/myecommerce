@@ -39,6 +39,9 @@ const STATUS_COLORS = {
   return_in_transit: "#0284c7",
   cancelled: "#dc2626",
   refunded: "#0d9488",
+  replacement_requested: "#7c3aed",
+  replacement_out: "#7c3aed",
+  replacement_completed: "#7c3aed",
 };
 
 // Amounts are in Indian Rupees to match the storefront (cart/checkout use ₹).
@@ -434,6 +437,16 @@ const DashboardContent = ({ data }) => {
               <InventoryRow
                 label="Value refunded"
                 value={money(summary.refundedValue)}
+                tone="text-gray-900"
+              />
+              <InventoryRow
+                label="Replacements in progress"
+                value={summary.replacementsInProgress}
+                tone={summary.replacementsInProgress > 0 ? "text-violet-600" : "text-gray-900"}
+              />
+              <InventoryRow
+                label="Replacements completed"
+                value={summary.replacementsCompleted}
                 tone="text-gray-900"
               />
             </div>

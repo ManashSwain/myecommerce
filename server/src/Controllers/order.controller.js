@@ -22,13 +22,16 @@ const generateOrderNumber = () =>
 
 // Statuses in which the customer can no longer cancel their order.
 //  • shipped   → goods are with the courier; must be received back first
-//  • the rest  → already finalised / on their way back
+//  • the rest  → already finalised / on their way back / being replaced
 const NON_CANCELLABLE_STATUSES = [
   "shipped",
   "delivered",
   "return_in_transit",
   "cancelled",
   "refunded",
+  "replacement_requested",
+  "replacement_out",
+  "replacement_completed",
 ];
 
 // Put the ordered quantities back into product variant stock. Called when an
@@ -45,6 +48,26 @@ const restockOrderItems = async (order) => {
             "variants.size": item.size,
           },
           { $inc: { "variants.$.stock": item.quantity } }
+        )
+      )
+  );
+};
+
+// Remove one replacement unit per ordered item from stock. Called when a
+// replacement is dispatched (the mirror of restockOrderItems). Kept as its own
+// helper so replacement logic never reuses / mutates cancellation paths.
+const deductReplacementStock = async (order) => {
+  await Promise.all(
+    (order.items || [])
+      .filter((item) => item.product)
+      .map((item) =>
+        Product.updateOne(
+          {
+            _id: item.product,
+            "variants.color": item.color,
+            "variants.size": item.size,
+          },
+          { $inc: { "variants.$.stock": -item.quantity } }
         )
       )
   );
@@ -563,16 +586,24 @@ export const cancelOrderAdmin = async (req, res) => {
     }
 
     if (
-      ["delivered", "return_in_transit", "cancelled", "refunded"].includes(
-        order.status,
-      )
+      [
+        "delivered",
+        "return_in_transit",
+        "cancelled",
+        "refunded",
+        "replacement_requested",
+        "replacement_out",
+        "replacement_completed",
+      ].includes(order.status)
     ) {
       return res.status(400).json({
         success: false,
         message:
           order.status === "return_in_transit"
             ? "This order is already on its way back. Receive the return to restock it."
-            : `An order that is already ${order.status} cannot be cancelled.`,
+            : order.status.startsWith("replacement")
+              ? "This order is in a replacement flow and cannot be cancelled."
+              : `An order that is already ${order.status} cannot be cancelled.`,
       });
     }
 
@@ -658,6 +689,249 @@ export const receiveReturn = async (req, res) => {
       success: false,
       message: err.message,
     });
+  }
+};
+
+// --- REPLACEMENT (exchange) FLOW ------------------------------------------
+// No money changes hands. A delivered order can be exchanged for a brand-new
+// unit of the same items. Statuses: replacement_requested → replacement_out →
+// replacement_completed. Stock: a unit is deducted when dispatched, and the
+// faulty unit is restocked when it reaches the store.
+
+// Statuses from which a replacement can be requested (delivered only — you
+// can't exchange something you never received).
+const REPLACEABLE_STATUSES = ["delivered"];
+
+const REPLACEMENT_ACTIVE_STATUSES = [
+  "replacement_requested",
+  "replacement_out",
+];
+
+// Verify every ordered item still has enough stock for the replacement unit.
+const validateReplacementStock = async (order) => {
+  for (const item of order.items || []) {
+    if (!item.product) continue;
+    const product = await Product.findById(item.product);
+    if (!product) {
+      return `"${item.title}" is no longer in our catalogue and can't be replaced.`;
+    }
+    const variant = (product.variants || []).find(
+      (v) => v.color === item.color && v.size === item.size,
+    );
+    const available = variant ? variant.stock : 0;
+    if (available < item.quantity) {
+      return `"${item.title}" (${item.color} / ${item.size}) is out of stock, so it can't be replaced right now.`;
+    }
+  }
+  return null; // all good
+};
+
+// REQUEST REPLACEMENT (patch) — customer.
+// Only the order's owner, only for a delivered order, and only once per order.
+export const requestReplacement = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { userId, reason } = req.body;
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "userId is required" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+    if (order.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only request a replacement for your own orders",
+      });
+    }
+
+    if (REPLACEMENT_ACTIVE_STATUSES.includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "A replacement for this order is already in progress.",
+      });
+    }
+    if (order.status === "replacement_completed") {
+      return res.status(400).json({
+        success: false,
+        message: "This order has already been replaced.",
+      });
+    }
+    if (!REPLACEABLE_STATUSES.includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A replacement can only be requested for an order that has been delivered.",
+      });
+    }
+
+    // Don't allow a replacement if we can't actually source the unit.
+    const stockIssue = await validateReplacementStock(order);
+    if (stockIssue) {
+      return res.status(400).json({ success: false, message: stockIssue });
+    }
+
+    order.status = "replacement_requested";
+    order.replacement = {
+      requestedBy: "user",
+      reason: reason || "",
+      requestedAt: new Date(),
+    };
+    await order.save();
+
+    notifyOrderStatus(order);
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Replacement requested. We'll arrange a pickup of the item and send a new one.",
+      data: order,
+    });
+  } catch (err) {
+    console.error("requestReplacement error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// DISPATCH REPLACEMENT (patch) — admin.
+// Approves the request and ships a new unit: deducts a unit from stock and
+// moves the order to "replacement_out". No money is involved.
+export const dispatchReplacement = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { note } = req.body;
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    if (order.status !== "replacement_requested") {
+      return res.status(400).json({
+        success: false,
+        message:
+          order.status === "replacement_out"
+            ? "This replacement has already been dispatched."
+            : "Only a requested replacement can be dispatched.",
+      });
+    }
+
+    // The new unit must physically exist before we promise it. (This also
+    // re-checks in case stock changed since the request.)
+    const stockIssue = await validateReplacementStock(order);
+    if (stockIssue) {
+      return res.status(400).json({ success: false, message: stockIssue });
+    }
+
+    // Take the replacement unit out of inventory.
+    await deductReplacementStock(order);
+
+    order.status = "replacement_out";
+    order.replacement = {
+      ...(order.replacement?.toObject
+        ? order.replacement.toObject()
+        : order.replacement || {}),
+      approvedAt: new Date(),
+      replacementStockDeducted: true,
+      note: note || order.replacement?.note || "",
+    };
+    await order.save();
+
+    notifyOrderStatus(order);
+
+    return res.status(200).json({
+      success: true,
+      message: "Replacement dispatched. A new unit is on its way.",
+      data: order,
+    });
+  } catch (err) {
+    console.error("dispatchReplacement error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// COMPLETE REPLACEMENT (patch) — admin.
+// The faulty/original unit has reached the store: restock it (if sellable) and
+// close the replacement. Money was never involved.
+export const completeReplacement = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { note, resellable } = req.body;
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    if (order.status !== "replacement_out") {
+      return res.status(400).json({
+        success: false,
+        message:
+          order.status === "replacement_completed"
+            ? "This replacement has already been completed."
+            : "Only a dispatched replacement can be completed.",
+      });
+    }
+
+    // Restock the returned original unit unless the admin says it can't be
+    // resold (e.g. damaged) — defaults to restocking.
+    const shouldRestock = resellable !== false;
+    if (shouldRestock) {
+      await restockOrderItems(order);
+    }
+
+    order.status = "replacement_completed";
+    order.replacement = {
+      ...(order.replacement?.toObject
+        ? order.replacement.toObject()
+        : order.replacement || {}),
+      returnedAt: new Date(),
+      completedAt: new Date(),
+      stockRestored: shouldRestock,
+      note: note || order.replacement?.note || "",
+    };
+    await order.save();
+
+    notifyOrderStatus(order);
+
+    return res.status(200).json({
+      success: true,
+      message: shouldRestock
+        ? "Replacement completed and the returned unit restocked."
+        : "Replacement completed. The returned unit was not restocked.",
+      data: order,
+    });
+  } catch (err) {
+    console.error("completeReplacement error:", err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 

@@ -56,7 +56,14 @@ export const getDashboardAnalytics = async (req, res) => {
     // will be) returned, so they are excluded from every revenue metric,
     // best-seller list and category breakdown. They only appear in the
     // cancellation counters below.
-    const NON_SALES_STATUSES = ["cancelled", "refunded", "return_in_transit"];
+    const NON_SALES_STATUSES = [
+      "cancelled",
+      "refunded",
+      "return_in_transit",
+      "replacement_requested",
+      "replacement_out",
+      "replacement_completed",
+    ];
     const orders = allOrders.filter(
       (o) => !NON_SALES_STATUSES.includes(o.status),
     );
@@ -75,6 +82,12 @@ export const getDashboardAnalytics = async (req, res) => {
     ).length;
     const returnsInTransit = allOrders.filter(
       (o) => o.status === "return_in_transit",
+    ).length;
+    const replacementsInProgress = allOrders.filter((o) =>
+      ["replacement_requested", "replacement_out"].includes(o.status),
+    ).length;
+    const replacementsCompleted = allOrders.filter(
+      (o) => o.status === "replacement_completed",
     ).length;
     const refundedValue = allOrders
       .filter((o) => o.status === "cancelled" || o.status === "refunded")
@@ -128,6 +141,9 @@ export const getDashboardAnalytics = async (req, res) => {
       return_in_transit: 0,
       cancelled: 0,
       refunded: 0,
+      replacement_requested: 0,
+      replacement_out: 0,
+      replacement_completed: 0,
     };
     allOrders.forEach((o) => {
       if (statusCounts[o.status] !== undefined) statusCounts[o.status] += 1;
@@ -284,6 +300,8 @@ export const getDashboardAnalytics = async (req, res) => {
           cancelledOrders,
           refundedOrders,
           returnsInTransit,
+          replacementsInProgress,
+          replacementsCompleted,
           refundedValue: Number(refundedValue.toFixed(2)),
         },
         dailySales,

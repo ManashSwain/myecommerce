@@ -2,13 +2,16 @@ import express from "express";
 import {
   cancelMyOrder,
   cancelOrderAdmin,
+  completeReplacement,
   createOrder,
   createDirectOrder,
+  dispatchReplacement,
   getAllOrders,
   getOrderById,
   getOrders,
   receiveReturn,
   refundOrder,
+  requestReplacement,
   updateOrderStatus,
 } from "../Controllers/order.controller.js";
 
@@ -29,6 +32,11 @@ router.patch("/admin/cancel/:orderId", cancelOrderAdmin);
 // Admin confirms a returned item has reached the store (restocks it)
 router.patch("/admin/receivereturn/:orderId", receiveReturn);
 router.patch("/admin/refund/:orderId", refundOrder);
+
+// Replacement / exchange (no money). Customer raises; admin dispatches + completes.
+router.patch("/replacement/request/:orderId", requestReplacement);
+router.patch("/admin/replacement/dispatch/:orderId", dispatchReplacement);
+router.patch("/admin/replacement/complete/:orderId", completeReplacement);
 
 export default router;
 

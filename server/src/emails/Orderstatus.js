@@ -42,6 +42,28 @@ const TERMINAL_STATUSES = {
   },
   cancelled: { label: "Order cancelled", caption: "your order has been cancelled" },
   refunded: { label: "Order refunded", caption: "your refund has been processed" },
+  replacement_requested: {
+    label: "Replacement requested",
+    caption: "we've received your replacement request and are reviewing it",
+  },
+  replacement_out: {
+    label: "Replacement on its way",
+    caption: "we've dispatched a new unit to you",
+  },
+  replacement_completed: {
+    label: "Replacement completed",
+    caption: "your replacement is complete — enjoy your new item",
+  },
+};
+
+// Human-readable notes for replacement statuses (no money involved).
+const REPLACEMENT_NOTES = {
+  replacement_requested:
+    "We'll arrange a pickup of your item and send a replacement once your request is approved. No payment is involved.",
+  replacement_out:
+    "A new unit is on its way. Once your original item is collected and reaches us, we'll close out the replacement.",
+  replacement_completed:
+    "Your replacement is complete. No payment was taken for this exchange.",
 };
 
 const isTerminal = (status) => Boolean(TERMINAL_STATUSES[status]);
@@ -163,7 +185,7 @@ const Orderstatus = ({ order = {} }) => {
           )
         ),
 
-        // Refund note for cancelled / refunded / returning orders.
+        // Informational note for terminal / replacement statuses.
         isTerminal(status)
           ? h(
               Section,
@@ -171,17 +193,19 @@ const Orderstatus = ({ order = {} }) => {
               h(
                 Text,
                 { style: refundNote },
-                status === "refunded"
-                  ? `A refund of ${formatCurrency(
-                      order.cancellation?.refundAmount || total
-                    )} has been processed to your original payment method.`
-                  : status === "return_in_transit"
-                    ? `Your parcel is on its way back to us. Once it reaches our warehouse we'll restore it to stock and issue your refund of ${formatCurrency(
+                REPLACEMENT_NOTES[status]
+                  ? REPLACEMENT_NOTES[status]
+                  : status === "refunded"
+                    ? `A refund of ${formatCurrency(
                         order.cancellation?.refundAmount || total
-                      )}.`
-                    : `A refund of ${formatCurrency(
-                        order.cancellation?.refundAmount || total
-                      )} is being processed and will reach your account shortly.`
+                      )} has been processed to your original payment method.`
+                    : status === "return_in_transit"
+                      ? `Your parcel is on its way back to us. Once it reaches our warehouse we'll restore it to stock and issue your refund of ${formatCurrency(
+                          order.cancellation?.refundAmount || total
+                        )}.`
+                      : `A refund of ${formatCurrency(
+                          order.cancellation?.refundAmount || total
+                        )} is being processed and will reach your account shortly.`
               )
             )
           : // Progress tracker (only for active orders)
