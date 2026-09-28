@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import FormModal from "../components/FormModal";
 import BackToHome from "../components/BackToHome";
+import { CardGridSkeleton } from "../components/Loader";
 import { API_BASE_URL } from "../constants";
 
 const emptyForm = {
@@ -129,7 +130,22 @@ const Savedaddressespage = () => {
     }
   };
 
-  if (!isLoaded) return null;
+  // Auth still resolving — show a matching skeleton instead of a blank page.
+  if (!isLoaded) {
+    return (
+      <div className="bg-white">
+        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+          <BackToHome />
+        </div>
+        <div className="mx-auto max-w-7xl px-4 pt-6 pb-16 sm:px-6 sm:pb-24 lg:px-8">
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">
+            Saved addresses
+          </h2>
+          <CardGridSkeleton />
+        </div>
+      </div>
+    );
+  }
 
   if (!isSignedIn) {
     return (
@@ -248,7 +264,7 @@ const Savedaddressespage = () => {
 
         {/* Address list */}
         {loading ? (
-          <p className="mt-10 text-sm text-gray-500">Loading addresses...</p>
+          <CardGridSkeleton />
         ) : addresses.length === 0 ? (
           <div className="mt-10 flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 py-24 text-center">
             <MapPinIcon aria-hidden="true" className="size-10 text-gray-300" />

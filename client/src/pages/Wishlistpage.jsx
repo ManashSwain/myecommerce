@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import BackToHome from "../components/BackToHome";
+import { ProductGridSkeleton } from "../components/Loader";
 import { API_BASE_URL } from "../constants";
 
 const Wishlistpage = () => {
@@ -85,8 +86,24 @@ const Wishlistpage = () => {
     }
   };
 
-  if (!isLoaded) return null;
+  // Auth still resolving — show a matching skeleton instead of a blank page.
+  if (!isLoaded) {
+    return (
+      <div className="bg-white">
+        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+          <BackToHome />
+        </div>
+        <div className="mx-auto max-w-7xl px-4 pt-6 pb-16 sm:px-6 sm:pb-24 lg:px-8">
+          <h2 className="text-2xl font-bold tracking-tight text-gray-900">
+            Wishlist
+          </h2>
+          <ProductGridSkeleton />
+        </div>
+      </div>
+    );
+  }
 
+  // Signed out — prompt to sign in.
   if (!isSignedIn) {
     return (
       <div className="bg-white">
@@ -110,7 +127,7 @@ const Wishlistpage = () => {
         </h2>
 
         {loading ? (
-          <p className="mt-10 text-sm text-gray-500">Loading wishlist...</p>
+          <ProductGridSkeleton />
         ) : items.length === 0 ? (
           <div className="mt-10 flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 py-24 text-center">
             <HeartIcon aria-hidden="true" className="size-10 text-gray-300" />

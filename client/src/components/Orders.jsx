@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import useAuth from "../customhooks/useAuth";
 import BackToHome from "./BackToHome";
+import { OrdersSkeleton } from "./Loader";
 import { getOrders } from "../utils/order";
 
 function classNames(...classes) {
@@ -47,7 +48,22 @@ const Orders = () => {
     load();
   }, [isSignedIn, isLoaded, user?.id]);
 
-  if (!isLoaded) return null;
+  // Auth still resolving — show a matching skeleton instead of a blank page.
+  if (!isLoaded) {
+    return (
+      <div className="bg-gray-50">
+        <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+          <BackToHome />
+        </div>
+        <div className="mx-auto max-w-2xl px-4 pt-6 pb-16 sm:px-6 sm:pb-24 lg:max-w-7xl lg:px-8">
+          <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+            Your orders
+          </h1>
+          <OrdersSkeleton />
+        </div>
+      </div>
+    );
+  }
 
   if (!isSignedIn) {
     return (
@@ -74,7 +90,7 @@ const Orders = () => {
         </div>
 
         {loading ? (
-          <p className="mt-10 text-sm text-gray-500">Loading your orders...</p>
+          <OrdersSkeleton />
         ) : orders.length === 0 ? (
           <div className="mt-10 flex flex-col items-center justify-center rounded-lg border border-dashed border-gray-300 py-24 text-center">
             <p className="text-sm text-gray-500">
