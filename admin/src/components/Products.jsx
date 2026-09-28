@@ -4,6 +4,7 @@ import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "react-toastify";
 import FormModal from "./FormModal";
 import ConfirmModal from "./ConfirmModal";
+import { ProductGridSkeleton } from "./Loader";
 import { API_BASE_URL } from "../constants";
 
 const emptyForm = {
@@ -50,6 +51,7 @@ const Products = () => {
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const slugTouched = useRef(false);
 
   const fetchProducts = async () => {
@@ -59,6 +61,8 @@ const Products = () => {
       setProducts(json.data || []);
     } catch (err) {
       setError("Could not load products. Is the server running?");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -586,6 +590,9 @@ const Products = () => {
         />
 
         {/* Products grid */}
+        {loading ? (
+          <ProductGridSkeleton />
+        ) : (
         <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 md:grid-cols-3 lg:grid-cols-4 lg:gap-x-8">
           {products.map((product) => (
             <div key={product._id} className="group relative">
@@ -656,8 +663,9 @@ const Products = () => {
             </div>
           ))}
         </div>
+        )}
 
-        {products.length === 0 && (
+        {!loading && products.length === 0 && (
           <p className="mt-6 text-sm text-gray-500">
             No products yet. Click "Add Product" to create one.
           </p>

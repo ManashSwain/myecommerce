@@ -4,6 +4,7 @@ import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { toast } from "react-toastify";
 import FormModal from "./FormModal";
 import ConfirmModal from "./ConfirmModal";
+import { CategoryGridSkeleton } from "./Loader";
 import { API_BASE_URL } from "../constants";
 
 const emptyForm = { name: "", description: "", image: null, preview: "" };
@@ -19,6 +20,7 @@ const CategoryManager = ({ title, singular, endpoints }) => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const fetchItems = async () => {
     try {
@@ -27,6 +29,8 @@ const CategoryManager = ({ title, singular, endpoints }) => {
       setItems(json.data || []);
     } catch (err) {
       setError(`Could not load ${title.toLowerCase()}. Is the server running?`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -287,6 +291,9 @@ const CategoryManager = ({ title, singular, endpoints }) => {
         />
 
         {/* Items grid */}
+        {loading ? (
+          <CategoryGridSkeleton />
+        ) : (
         <div className="mt-6 grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 md:grid-cols-4 lg:gap-x-8">
           {filteredItems.map((item) => (
             <div key={item._id} className="group relative">
@@ -324,14 +331,15 @@ const CategoryManager = ({ title, singular, endpoints }) => {
             </div>
           ))}
         </div>
+        )}
 
-        {items.length === 0 && (
+        {!loading && items.length === 0 && (
           <p className="mt-6 text-sm text-gray-500">
             No {title.toLowerCase()} yet. Click "Add {singular}" to create one.
           </p>
         )}
 
-        {items.length > 0 && filteredItems.length === 0 && (
+        {!loading && items.length > 0 && filteredItems.length === 0 && (
           <p className="mt-6 text-sm text-gray-500">
             No {title.toLowerCase()} match "{search.trim()}".
           </p>
