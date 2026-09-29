@@ -345,6 +345,25 @@ const Productreviews = ({ productId }) => {
                       {review.content}
                     </p>
                   </div>
+                  {/* Own review actions — sit right under the user's comment */}
+                  {user?.id === review.clerkId && (
+                    <div className="mt-1 flex gap-3 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(review)}
+                        className="underline text-gray-500 hover:text-indigo-600"
+                      >
+                        Update
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(review)}
+                        className="underline text-gray-500 hover:text-red-600"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
                   {/* Admin / store reply — public, visible to everyone */}
                   {review.adminReply && (
                     <div className="mt-3 flex gap-2">
@@ -373,25 +392,6 @@ const Productreviews = ({ productId }) => {
                           </p>
                         </div>
                       </div>
-                    </div>
-                  )}
-                  {/* Own review actions */}
-                  {user?.id === review.clerkId && (
-                    <div className="mt-1 flex gap-3 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => handleEdit(review)}
-                        className="underline text-gray-500 hover:text-indigo-600"
-                      >
-                        Update
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(review)}
-                        className="underline text-gray-500 hover:text-red-600"
-                      >
-                        Delete
-                      </button>
                     </div>
                   )}
                 </div>
