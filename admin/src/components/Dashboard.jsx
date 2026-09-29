@@ -537,7 +537,7 @@ const InventoryRow = ({ label, value, tone }) => (
 );
 
 const EmptyChart = ({ label = "No data yet." }) => (
-  <div className="flex h-[300px] items-center justify-center rounded-md border border-dashed border-gray-200">
+  <div className="flex h-75 items-center justify-center rounded-md border border-dashed border-gray-200">
     <p className="text-sm text-gray-400">{label}</p>
   </div>
 );

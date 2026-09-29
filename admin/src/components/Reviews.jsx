@@ -231,7 +231,7 @@ const Reviews = () => {
                         </div>
                       </div>
 
-                      <p className="mt-2 text-sm break-words text-gray-700">
+                      <p className="mt-2 text-sm wrap-break-word text-gray-700">
                         {review.content}
                       </p>
 
@@ -246,7 +246,7 @@ const Reviews = () => {
                                 ).toLocaleDateString()
                               : ""}
                           </p>
-                          <p className="mt-0.5 text-sm break-words text-gray-700">
+                          <p className="mt-0.5 text-sm wrap-break-word text-gray-700">
                             {review.adminReply}
                           </p>
                         </div>
