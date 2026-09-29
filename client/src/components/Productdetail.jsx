@@ -28,6 +28,17 @@ const Productdetail = () => {
   const [feedback, setFeedback] = useState({ type: "", message: "" });
   const [sizeChartOpen, setSizeChartOpen] = useState(false);
   const [activeImage, setActiveImage] = useState(0);
+  // Hover-zoom state for the main product image
+  const [zooming, setZooming] = useState(false);
+  const [zoomPos, setZoomPos] = useState({ x: 50, y: 50 });
+
+  // Track the cursor position over the image so it zooms toward the pointer
+  const handleZoomMove = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setZoomPos({ x, y });
+  };
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -346,13 +357,24 @@ const Productdetail = () => {
                     </div>
                   )}
 
-                  {/* Main image */}
+                  {/* Main image — hover to magnify in place */}
                   <div className="flex-1">
-                    <img
-                      alt={product.title}
-                      src={images[activeImage] || images[0]}
-                      className="aspect-4/5 w-full rounded-lg bg-gray-100 object-cover"
-                    />
+                    <div
+                      className="group relative aspect-4/5 w-full cursor-zoom-in overflow-hidden rounded-lg bg-gray-100"
+                      onMouseEnter={() => setZooming(true)}
+                      onMouseLeave={() => setZooming(false)}
+                      onMouseMove={handleZoomMove}
+                    >
+                      <img
+                        alt={product.title}
+                        src={images[activeImage] || images[0]}
+                        className="size-full object-cover transition-transform duration-200 ease-out will-change-transform"
+                        style={{
+                          transform: zooming ? "scale(1.8)" : "scale(1)",
+                          transformOrigin: `${zoomPos.x}% ${zoomPos.y}%`,
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               ) : (
