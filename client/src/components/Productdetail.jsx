@@ -27,6 +27,7 @@ const Productdetail = () => {
   const [stepperBusy, setStepperBusy] = useState(false);
   const [feedback, setFeedback] = useState({ type: "", message: "" });
   const [sizeChartOpen, setSizeChartOpen] = useState(false);
+  const [activeImage, setActiveImage] = useState(0);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -43,6 +44,7 @@ const Productdetail = () => {
         }
         const data = json.data;
         setProduct(data);
+        setActiveImage(0);
         // Preselect the first color and its first in-stock size
         const colors = [...new Set((data.variants || []).map((v) => v.color))];
         const firstColor = colors[0] || "";
@@ -309,50 +311,65 @@ const Productdetail = () => {
             </ol>
           </nav>
 
-          {/* Image gallery */}
-          <div className="mx-auto mt-6 max-w-2xl sm:px-6 lg:grid lg:max-w-7xl lg:grid-cols-3 lg:gap-8 lg:px-8">
-            {images[0] && (
-              <img
-                alt={product.title}
-                src={images[0]}
-                className="row-span-2 aspect-3/4 size-full rounded-lg object-cover max-lg:hidden"
-              />
-            )}
-            {images[1] && (
-              <img
-                alt={product.title}
-                src={images[1]}
-                className="col-start-2 aspect-3/2 size-full rounded-lg object-cover max-lg:hidden"
-              />
-            )}
-            {images[2] && (
-              <img
-                alt={product.title}
-                src={images[2]}
-                className="col-start-2 row-start-2 aspect-3/2 size-full rounded-lg object-cover max-lg:hidden"
-              />
-            )}
-            {images.length > 0 && (
-              <img
-                alt={product.title}
-                src={images[3] || images[0]}
-                className="row-span-2 aspect-4/5 size-full object-cover sm:rounded-lg lg:aspect-3/4"
-              />
-            )}
-          </div>
-
           {/* Product info */}
-          <div className="mx-auto max-w-2xl px-4 pt-10 pb-16 sm:px-6 lg:grid lg:max-w-7xl lg:grid-cols-3 lg:grid-rows-[auto_auto_1fr] lg:gap-x-8 lg:px-8 lg:pt-16 lg:pb-24">
-            <div className="lg:col-span-2 lg:border-r lg:border-gray-200 lg:pr-8">
+          <div className="mx-auto mt-6 max-w-2xl sm:px-6 lg:grid lg:max-w-7xl lg:grid-cols-12 lg:gap-x-8 lg:px-8">
+            {/* Image gallery — main image + thumbnails. Sits in a constrained
+                column on large screens so the image never dominates. Adapts to
+                any number of images (1, 2, 5, N) without awkward gaps. */}
+            <div className="lg:col-span-6 xl:col-span-5">
+              {images.length > 0 ? (
+                <div className="flex flex-col-reverse gap-4 sm:flex-row">
+                  {/* Thumbnails — only shown when there is more than one image */}
+                  {images.length > 1 && (
+                    <div className="flex gap-3 overflow-x-auto pb-1 sm:max-h-[32rem] sm:flex-col sm:overflow-y-auto sm:overflow-x-hidden sm:pb-0">
+                      {images.map((image, index) => (
+                        <button
+                          key={`${image}-${index}`}
+                          type="button"
+                          onClick={() => setActiveImage(index)}
+                          aria-label={`View image ${index + 1}`}
+                          aria-current={activeImage === index}
+                          className={classNames(
+                            "size-16 shrink-0 overflow-hidden rounded-lg border-2 bg-gray-100 transition",
+                            activeImage === index
+                              ? "border-indigo-600"
+                              : "border-transparent hover:border-gray-300"
+                          )}
+                        >
+                          <img
+                            alt={`${product.title} thumbnail ${index + 1}`}
+                            src={image}
+                            className="size-full object-cover"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Main image */}
+                  <div className="flex-1">
+                    <img
+                      alt={product.title}
+                      src={images[activeImage] || images[0]}
+                      className="aspect-4/5 w-full rounded-lg bg-gray-100 object-cover"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="flex aspect-4/5 w-full items-center justify-center rounded-lg bg-gray-100 text-sm text-gray-400">
+                  No image available
+                </div>
+              )}
+            </div>
+
+            {/* Details column (title, price, options, description) */}
+            <div className="mt-10 lg:col-span-6 lg:mt-0 xl:col-span-7">
               <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
                 {product.title}
               </h1>
-            </div>
 
-            {/* Options */}
-            <div className="mt-4 lg:row-span-3 lg:mt-0">
               <h2 className="sr-only">Product information</h2>
-              <p className="text-3xl tracking-tight text-gray-900">
+              <p className="mt-3 text-3xl tracking-tight text-gray-900">
                 ₹{product.price}
               </p>
 
@@ -542,14 +559,16 @@ const Productdetail = () => {
                   </p>
                 )}
               </form>
-            </div>
 
-            <div className="py-10 lg:col-span-2 lg:col-start-1 lg:border-r lg:border-gray-200 lg:pt-6 lg:pr-8 lg:pb-16">
               {/* Description */}
-              <div>
-                <h3 className="sr-only">Description</h3>
-                <div className="space-y-6">
-                  <p className="text-base text-gray-900">{product.description}</p>
+              <div className="mt-12 border-t border-gray-200 pt-8">
+                <h3 className="text-sm font-semibold tracking-wide text-gray-900 uppercase">
+                  Description
+                </h3>
+                <div className="mt-4">
+                  <p className="text-base leading-relaxed whitespace-pre-line text-gray-500">
+                    {product.description}
+                  </p>
                 </div>
               </div>
             </div>
@@ -557,7 +576,10 @@ const Productdetail = () => {
         </div>
       </div>
 
-      <Productreviews productId={productId} />
+      {/* Reviews */}
+      <div className="mt-16 sm:mt-20">
+        <Productreviews productId={productId} />
+      </div>
 
       <Sizechart open={sizeChartOpen} onClose={() => setSizeChartOpen(false)} />
     </>
