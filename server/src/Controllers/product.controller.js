@@ -1,6 +1,26 @@
 import mongoose from "mongoose";
 import { Product } from "../Modals/product.modal.js";
+import { Order } from "../Modals/order.modal.js";
 import { uploadToCloudinary } from "../utils/cloudinary.js";
+
+// Order statuses that are NOT real sales (money returned / item coming back /
+// exchanged). Excluded when computing best sellers, matching the analytics.
+const NON_SALES_STATUSES = [
+  "cancelled",
+  "refunded",
+  "return_in_transit",
+  "replacement_requested",
+  "replacement_out",
+  "replacement_completed",
+];
+
+// Start of the current calendar month (server-local time).
+const startOfMonth = () => {
+  const d = new Date();
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
 
 // String arrays (e.g. existingImages) arrive as JSON strings too
 const parseStringArray = (raw) => {
@@ -86,6 +106,104 @@ export const getProduct = async (req, res) => {
       data: allProducts,
     });
   } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// GET TOP SELLING PRODUCTS THIS MONTH (get) — public storefront.
+// Ranks products by units sold in the current calendar month, computed from
+// real order line items (never static data), then joins each ranking back to
+// the live Product collection so the cards show current title / image / price.
+// Query: ?limit=4&period=month|today|all
+export const getTopSellingProducts = async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 4, 1), 24);
+    const period = req.query.period || "month";
+
+    // Time window for "real sales".
+    let since = null;
+    if (period === "today") {
+      since = new Date();
+      since.setHours(0, 0, 0, 0);
+    } else if (period === "month") {
+      since = startOfMonth();
+    } // "all" → no date filter
+
+    const orderMatch = { status: { $nin: NON_SALES_STATUSES } };
+    if (since) orderMatch.createdAt = { $gte: since };
+
+    // Aggregate units + revenue per product from order line items.
+    const ranked = await Order.aggregate([
+      { $match: orderMatch },
+      { $unwind: "$items" },
+      { $match: { "items.product": { $ne: null } } },
+      {
+        $group: {
+          _id: "$items.product",
+          units: { $sum: "$items.quantity" },
+          revenue: {
+            $sum: { $multiply: ["$items.price", "$items.quantity"] },
+          },
+          // Keep a snapshot title/image as a fallback if the product was deleted.
+          snapshotTitle: { $first: "$items.title" },
+          snapshotImage: { $first: "$items.image" },
+          // Most recent colour purchased, used for the card subtitle.
+          lastColor: { $last: "$items.color" },
+        },
+      },
+      { $sort: { units: -1, revenue: -1 } },
+      { $limit: limit },
+    ]);
+
+    if (ranked.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No sales in the selected period yet",
+        data: [],
+      });
+    }
+
+    // Join the rankings back to live products so the cards are always current.
+    const productIds = ranked.map((r) => r._id);
+    const products = await Product.find({ _id: { $in: productIds } }).lean();
+    const productById = new Map(
+      products.map((p) => [String(p._id), p]),
+    );
+
+    const data = ranked
+      // Drop rankings for products that no longer exist, so we only ever show
+      // real, purchasable catalogue items.
+      .filter((r) => productById.has(String(r._id)))
+      .map((r) => {
+        const p = productById.get(String(r._id));
+        // Prefer a live colour from the product's variants; fall back to the
+        // colour that was actually bought.
+        const color =
+          p.variants?.[0]?.color || r.lastColor || "";
+        return {
+          _id: p._id,
+          id: p._id,
+          title: p.title,
+          slug: p.slug,
+          price: p.price,
+          image: p.images?.[0] || r.snapshotImage || "",
+          color,
+          rating: p.rating || 0,
+          unitsSold: r.units,
+          revenue: Number((r.revenue || 0).toFixed(2)),
+        };
+      });
+
+    return res.status(200).json({
+      success: true,
+      message: "Fetched top selling products successfully",
+      data,
+    });
+  } catch (err) {
+    console.error("getTopSellingProducts error:", err);
     return res.status(500).json({
       success: false,
       message: err.message,
