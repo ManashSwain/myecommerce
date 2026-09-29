@@ -5,6 +5,7 @@ import useAuth from "../customhooks/useAuth";
 import BackToHome from "./BackToHome";
 import { OrdersSkeleton } from "./Loader";
 import { getOrders, cancelOrder, requestReplacement } from "../utils/order";
+import { downloadInvoice } from "../utils/invoice";
 import {
   Dialog,
   DialogBackdrop,
@@ -14,6 +15,7 @@ import {
 import {
   ExclamationTriangleIcon,
   ArrowsRightLeftIcon,
+  ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 
 function classNames(...classes) {
@@ -161,6 +163,18 @@ const Orders = () => {
       toast.error(err.message);
     } finally {
       setReplacing(false);
+    }
+  };
+
+  // Generate and download the order's invoice as a PDF. Purely client-side —
+  // the PDF is built from the order data already on screen (no DB writes).
+  const handleDownloadInvoice = (order) => {
+    try {
+      downloadInvoice(order);
+      toast.success("Invoice downloaded");
+    } catch (err) {
+      console.error(err);
+      toast.error("Could not generate the invoice");
     }
   };
 
@@ -392,6 +406,19 @@ const Orders = () => {
                       </p>
 
                       <div className="flex flex-wrap items-center gap-2">
+                        {/* Download invoice — available for every order */}
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadInvoice(order)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                          <ArrowDownTrayIcon
+                            aria-hidden="true"
+                            className="size-4"
+                          />
+                          Download invoice
+                        </button>
+
                         {/* Cancel button — only while the order can still be cancelled */}
                         {canCancel(order.status) && (
                           <button
