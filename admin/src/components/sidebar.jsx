@@ -8,6 +8,7 @@ import {
   Calendar,
   FileText,
   PieChart,
+  MessageSquare,
 } from "lucide-react";
 
 const menuItems = [
@@ -17,6 +18,7 @@ const menuItems = [
   { name: "Sub categories", path: "/sub-categories", icon: Calendar },
   { name: "Products", path: "/products", icon: FileText },
   { name: "Orders", path: "/orders", icon: PieChart },
+  { name: "Reviews", path: "/reviews", icon: MessageSquare },
 ];
 
 const Sidebar = () => {
@@ -62,3 +64,4 @@ const Sidebar = () => {
 };
 
 export default Sidebar;
+

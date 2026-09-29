@@ -67,6 +67,60 @@ export const createReview = async (req,res) => {
     })
   }
 }
+
+// ADMIN REPLY (patch) — the store replies to a customer's review.
+// The reply is public (returned by getReview), so anyone viewing the product's
+// reviews sees it. Sending an empty reply clears it. Only admins should reach
+// this route (the admin app calls it); the public API stays read-only here.
+export const adminReplyReview = async (req,res) => {
+  try {
+    const reviewId = req.params.reviewId;
+    const { reply, adminName } = req.body;
+
+    if (!mongoose.isValidObjectId(reviewId)) {
+      return res.status(400).json({
+        success : false,
+        message : "Invalid review ID",
+      })
+    }
+    if (reply === undefined || reply === null) {
+      return res.status(400).json({
+        success : false,
+        message : "reply is required (send an empty string to clear it)",
+      })
+    }
+
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      return res.status(404).json({
+        success : false,
+        message : "Review not found",
+      })
+    }
+
+    const trimmed = String(reply).trim();
+    review.adminReply = trimmed;
+    review.adminRepliedAt = trimmed ? new Date() : undefined;
+    review.adminRepliedBy = trimmed
+      ? (adminName || "Store team")
+      : undefined;
+
+    const updatedReview = await review.save();
+    return res.status(200).json({
+      success : true,
+      message : trimmed
+        ? "Reply posted successfully"
+        : "Reply removed successfully",
+      data : updatedReview,
+    })
+  }catch(err){
+    return res.status(500).json({
+      success : false,
+      message : err.message,
+    })
+  }
+}
+
 // GET REVIEWS (get) — optionally filtered by ?productId=, newest first
 export const getReview = async (req,res)=>{
   try {

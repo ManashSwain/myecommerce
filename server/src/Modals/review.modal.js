@@ -27,7 +27,19 @@ const reviewSchema = new mongoose.Schema({
     },
     date : {
         type : Date,
-    }
+    },
+    // Admin (store) reply to this review. A single, editable public response
+    // that is shown to everyone viewing the product's reviews.
+    adminReply : {
+        type : String,
+        default : "",
+    },
+    adminRepliedAt : {
+        type : Date,
+    },
+    adminRepliedBy : {
+        type : String,
+    },
 },{timestamps : true})
 
 export const Review = mongoose.models.Review || mongoose.model("Review", reviewSchema)

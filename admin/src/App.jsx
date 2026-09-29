@@ -11,6 +11,7 @@ import Categories from "./components/Categories";
 import Subcategories from "./components/Subcategories";
 import Products from "./components/Products";
 import Orders from "./components/Orders";
+import Reviews from "./components/Reviews";
 import Dashboard from "./components/Dashboard";
 import Toast from "./components/Toast";
 
@@ -25,6 +26,7 @@ const router = createBrowserRouter([
       { path: "sub-categories", element: <Subcategories/>},
       { path: "products", element: <Products/> },
       { path: "orders", element: <Orders/> },
+      { path: "reviews", element: <Reviews/> },
     ],
   },
 ]);
@@ -39,3 +41,4 @@ function App() {
 }
 
 export default App;
+

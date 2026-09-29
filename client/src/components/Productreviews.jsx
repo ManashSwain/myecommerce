@@ -345,6 +345,36 @@ const Productreviews = ({ productId }) => {
                       {review.content}
                     </p>
                   </div>
+                  {/* Admin / store reply — public, visible to everyone */}
+                  {review.adminReply && (
+                    <div className="mt-3 flex gap-2">
+                      <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white">
+                        {(review.adminRepliedBy || "S").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-sm font-semibold text-gray-900">
+                            {review.adminRepliedBy || "Store team"}
+                          </span>
+                          <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-medium tracking-wide text-indigo-600 uppercase">
+                            Seller
+                          </span>
+                          {review.adminRepliedAt && (
+                            <span className="text-xs text-gray-400">
+                              {new Date(
+                                review.adminRepliedAt,
+                              ).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 inline-block max-w-full rounded-2xl rounded-tl-sm bg-indigo-50 px-4 py-2.5">
+                          <p className="text-sm break-words text-gray-700">
+                            {review.adminReply}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {/* Own review actions */}
                   {user?.id === review.clerkId && (
                     <div className="mt-1 flex gap-3 text-xs">
