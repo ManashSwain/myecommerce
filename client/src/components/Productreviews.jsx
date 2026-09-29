@@ -341,7 +341,7 @@ const Productreviews = ({ productId }) => {
                         />
                       ))}
                     </div>
-                    <p className="mt-1 text-sm break-words text-gray-700">
+                    <p className="mt-1 text-sm wrap-break-word text-gray-700">
                       {review.content}
                     </p>
                   </div>
@@ -387,7 +387,7 @@ const Productreviews = ({ productId }) => {
                           )}
                         </div>
                         <div className="mt-1 inline-block max-w-full rounded-2xl rounded-tl-sm bg-indigo-50 px-4 py-2.5">
-                          <p className="text-sm break-words text-gray-700">
+                          <p className="text-sm wrap-break-word text-gray-700">
                             {review.adminReply}
                           </p>
                         </div>

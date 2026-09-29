@@ -332,7 +332,7 @@ const Productdetail = () => {
                 <div className="flex flex-col-reverse gap-4 sm:flex-row">
                   {/* Thumbnails — only shown when there is more than one image */}
                   {images.length > 1 && (
-                    <div className="flex gap-3 overflow-x-auto pb-1 sm:max-h-[32rem] sm:flex-col sm:overflow-y-auto sm:overflow-x-hidden sm:pb-0">
+                    <div className="flex gap-3 overflow-x-auto pb-1 sm:max-h-128 sm:flex-col sm:overflow-y-auto sm:overflow-x-hidden sm:pb-0">
                       {images.map((image, index) => (
                         <button
                           key={`${image}-${index}`}
