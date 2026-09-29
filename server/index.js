@@ -25,6 +25,9 @@ import newsletterrouter from "./src/Routes/newsletter.route.js"
 import wishlistRouter from "./src/Routes/wishlist.route.js";
 import analyticsrouter from "./src/Routes/analytics.route.js";
 
+// Stripe webhook controller (needs the RAW body for signature verification)
+import { stripeWebhook } from "./src/Controllers/order.controller.js";
+
 // DNS SETUP
 import dns from "dns";
 
@@ -35,6 +38,15 @@ const PORT = 3000;
 
 // Middlewares
 app.use(cors());
+
+// Stripe webhook MUST be mounted BEFORE express.json(), because signature
+// verification needs the raw request body rather than the parsed JSON.
+app.post(
+  "/api/order/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  stripeWebhook
+);
+
 // Route Middlewares
 app.use("/api", userrouter);
 // Express middlewares

@@ -26,6 +26,33 @@ const readJson = async (res, fallbackMessage) => {
   return json;
 };
 
+// Start a Stripe Checkout Session for the given checkout payload (cart or
+// "Buy now" items). Returns the hosted Stripe URL the browser should go to.
+export const createCheckoutSession = async (payload) => {
+  const res = await fetch(
+    `${API_BASE_URL}/api/order/create-checkout-session`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }
+  );
+  const json = await readJson(res, "Could not start checkout");
+  return json.data; // { url, sessionId }
+};
+
+// After Stripe redirects back with ?success=true&session_id=..., ask the
+// backend to verify the payment and create the order. Returns the order.
+export const confirmCheckout = async (sessionId) => {
+  const res = await fetch(`${API_BASE_URL}/api/order/confirm-checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId }),
+  });
+  const json = await readJson(res, "Could not confirm your order");
+  return json.data;
+};
+
 // Place an order from the checkout payload. The backend builds the order
 // from the user's cart and clears it on success.
 export const createOrder = async (payload) => {

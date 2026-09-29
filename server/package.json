@@ -21,7 +21,10 @@
     "mongodb": "^7.1.0",
     "mongoose": "^9.3.0",
     "multer": "^2.1.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "react-email": "^6.11.0",
-    "resend": "^6.30.0"
+    "resend": "^6.30.0",
+    "stripe": "^22.6.2"
   }
 }

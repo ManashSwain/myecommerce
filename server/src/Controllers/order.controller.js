@@ -3,8 +3,20 @@ import { Order } from "../Modals/order.modal.js";
 import { Cart } from "../Modals/cart.modal.js";
 import { Product } from "../Modals/product.modal.js";
 import { sendOrderStatusEmail } from "../utils/email.js";
+import { getStripe, getClientUrl } from "../utils/stripe.js";
 
 const TAX_RATE = 0.0863;
+
+// Currency sent to Stripe. Indian accounts (and anyone charging domestic
+// customers) use "inr". Stripe India only allows foreign currencies for
+// registered businesses that have enabled international payments, so keep
+// this on the domestic currency unless you've been onboarded for that.
+const STRIPE_CURRENCY = "inr";
+
+// All money is stored in the shop's major unit (e.g. rupees). Stripe only
+// speaks in the smallest unit (paise, i.e. 1/100 of a rupee), so convert at
+// the boundary by multiplying by 100.
+const toStripeAmount = (amount) => Math.round(Number(amount) * 100);
 
 // Fire-and-forget order email so a mail failure never breaks the API
 // response. Logs (rather than throws) on failure.
@@ -109,6 +121,474 @@ const applyCancellation = async (order, { cancelledBy, reason }) => {
 
   notifyOrderStatus(order);
   return order;
+};
+
+// ---------------------------------------------------------------------------
+// STRIPE CHECKOUT
+// ---------------------------------------------------------------------------
+// The client posts the same checkout payload it always did, but instead of
+// creating the order immediately we:
+//   1. validate stock + build the line items (shared helpers below),
+//   2. create a Stripe Checkout Session for the exact server-computed total,
+//   3. return the hosted Stripe URL for the browser to redirect to.
+// The order itself is only created once Stripe confirms payment — so we never
+// reserve stock for an abandoned checkout.
+
+// Validate the requested lines against live stock and return order items plus
+// the money breakdown. `cartItems` shape: { product (populated), quantity,
+// color, size }. Throws an Error with a user-friendly `.statusCode` on failure
+// so callers can surface it directly.
+const buildOrderItemsFromCart = async (userId) => {
+  const cart = await Cart.findOne({ userId }).populate("items.product");
+  if (!cart || cart.items.length === 0) {
+    const err = new Error("Your cart is empty");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const items = cart.items
+    .filter((item) => item.product)
+    .map((item) => ({
+      product: item.product._id,
+      title: item.product.title,
+      price: item.product.price,
+      image: item.product.images?.[0] || "",
+      quantity: item.quantity,
+      color: item.color,
+      size: item.size,
+      _product: item.product,
+    }));
+
+  if (items.length === 0) {
+    const err = new Error("Your cart has no valid products");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  for (const item of items) {
+    const variant = (item._product.variants || []).find(
+      (v) => v.color === item.color && v.size === item.size
+    );
+    const available = variant ? variant.stock : 0;
+    if (available < item.quantity) {
+      const err = new Error(
+        `"${item.title}" (${item.color} / ${item.size}) only has ${available} left in stock.`
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  return items.map(({ _product, ...rest }) => rest);
+};
+
+// Same idea as buildOrderItemsFromCart but for explicit "Buy now" lines.
+const buildOrderItemsFromDirect = async (rawItems) => {
+  const productIds = rawItems.map((item) => item.productId);
+  if (productIds.some((id) => !mongoose.isValidObjectId(id))) {
+    const err = new Error("Invalid product ID");
+    err.statusCode = 400;
+    throw err;
+  }
+  const products = await Product.find({ _id: { $in: productIds } });
+  const productById = new Map(
+    products.map((product) => [product._id.toString(), product])
+  );
+
+  const items = [];
+  for (const item of rawItems) {
+    const product = productById.get(String(item.productId));
+    const quantity = Number(item.quantity) || 1;
+    if (!product) {
+      const err = new Error("A product in your order was not found");
+      err.statusCode = 404;
+      throw err;
+    }
+    if (quantity < 1) {
+      const err = new Error("quantity must be at least 1");
+      err.statusCode = 400;
+      throw err;
+    }
+    const variant = (product.variants || []).find(
+      (v) => v.color === item.color && v.size === item.size
+    );
+    const available = variant ? variant.stock : 0;
+    if (available < quantity) {
+      const err = new Error(
+        `"${product.title}" (${item.color} / ${item.size}) only has ${available} left in stock.`
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+    items.push({
+      product: product._id,
+      title: product.title,
+      price: product.price,
+      image: product.images?.[0] || "",
+      quantity,
+      color: item.color,
+      size: item.size,
+    });
+  }
+  return items;
+};
+
+// Compute subtotal / taxes / shipping / total from order items.
+const computeTotals = (items, shipping = 0) => {
+  const subtotal = items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const taxes = Number((subtotal * TAX_RATE).toFixed(2));
+  const shippingCost = Number(shipping) || 0;
+  const total = Number((subtotal + shippingCost + taxes).toFixed(2));
+  return { subtotal, taxes, shipping: shippingCost, total };
+};
+
+// Validate the checkout payload shared by both flows (contact + address).
+const validateCheckoutPayload = ({ userId, contactEmail, shippingAddress }) => {
+  if (!userId) return "userId is required";
+  if (!contactEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) {
+    return "A valid contact email is required";
+  }
+  if (
+    !shippingAddress ||
+    !shippingAddress.fullName ||
+    !shippingAddress.addressLine1 ||
+    !shippingAddress.city ||
+    !shippingAddress.pincode
+  ) {
+    return "A complete shipping address is required";
+  }
+  return null;
+};
+
+// CREATE CHECKOUT SESSION (post)
+// Builds a Stripe Checkout Session for the user's cart (or "Buy now" items)
+// and returns the hosted payment page URL. The order is created later, when
+// payment succeeds (see confirmCheckout).
+export const createCheckoutSession = async (req, res) => {
+  try {
+    const {
+      userId,
+      contactEmail,
+      shippingAddress,
+      deliveryMethod = "Standard",
+      shipping = 0,
+      items: rawItems,
+    } = req.body;
+
+    const validationError = validateCheckoutPayload({
+      userId,
+      contactEmail,
+      shippingAddress,
+    });
+    if (validationError) {
+      return res.status(400).json({ success: false, message: validationError });
+    }
+
+    const isDirect = Array.isArray(rawItems) && rawItems.length > 0;
+    const items = isDirect
+      ? await buildOrderItemsFromDirect(rawItems)
+      : await buildOrderItemsFromCart(userId);
+
+    const totals = computeTotals(items, shipping);
+    const stripe = getStripe();
+    const clientUrl = getClientUrl();
+    // Session id is echoed back as a query param so the client can ask the
+    // backend to finalise the order (and, defensively, so a webhook could too).
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        ...items.map((item) => ({
+          quantity: item.quantity,
+          price_data: {
+            currency: STRIPE_CURRENCY,
+            unit_amount: toStripeAmount(item.price),
+            product_data: {
+              name: item.title,
+              description: `${item.color} / ${item.size}`,
+              ...(item.image ? { images: [item.image] } : {}),
+            },
+          },
+        })),
+        // Shipping + taxes are sent as their own lines so the Stripe total
+        // matches our order total exactly.
+        ...(totals.shipping > 0
+          ? [
+              {
+                quantity: 1,
+                price_data: {
+                  currency: STRIPE_CURRENCY,
+                  unit_amount: toStripeAmount(totals.shipping),
+                  product_data: { name: `${deliveryMethod} shipping` },
+                },
+              },
+            ]
+          : []),
+        ...(totals.taxes > 0
+          ? [
+              {
+                quantity: 1,
+                price_data: {
+                  currency: STRIPE_CURRENCY,
+                  unit_amount: toStripeAmount(totals.taxes),
+                  product_data: { name: "Taxes" },
+                },
+              },
+            ]
+          : []),
+      ],
+      customer_email: contactEmail,
+      // The full order payload is stashed on the session so confirmCheckout
+      // can rebuild the exact same order without trusting the client again.
+      metadata: {
+        userId,
+        isDirect: isDirect ? "true" : "false",
+        deliveryMethod,
+        shipping: String(totals.shipping),
+        contactEmail,
+        shippingAddress: JSON.stringify(shippingAddress),
+        // Stripe metadata values max at 500 chars; our items are small
+        // (id, qty, color, size) so this fits comfortably.
+        directItems: isDirect
+          ? JSON.stringify(
+              rawItems.map((i) => ({
+                productId: i.productId,
+                color: i.color,
+                size: i.size,
+                quantity: Number(i.quantity) || 1,
+              }))
+            )
+          : "",
+      },
+      success_url: `${clientUrl}/checkout?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${clientUrl}/checkout?canceled=true`,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Checkout session created",
+      data: { url: session.url, sessionId: session.id },
+    });
+  } catch (err) {
+    console.error("createCheckoutSession error:", {
+      type: err.type,
+      code: err.code,
+      message: err.message,
+      raw: err.raw?.message,
+    });
+    return res.status(err.statusCode || 500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// CONFIRM CHECKOUT (post)
+// Called by the client after Stripe redirects back with ?success=true. Verifies
+// the session was actually paid, then creates the order from the stashed
+// metadata — decrementing stock and clearing the cart exactly like the old
+// direct flow. Idempotent: re-calling with the same session returns the
+// already-created order instead of duplicating it.
+export const confirmCheckout = async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (!sessionId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "sessionId is required" });
+    }
+
+    const stripe = getStripe();
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent"],
+    });
+
+    if (session.payment_status !== "paid") {
+      return res.status(400).json({
+        success: false,
+        message: "Payment has not been completed for this session.",
+      });
+    }
+
+    // Already finalised? Return the existing order (idempotent).
+    if (session.metadata?.orderId) {
+      const existing = await Order.findById(session.metadata.orderId);
+      if (existing) {
+        return res.status(200).json({
+          success: true,
+          message: "Order already confirmed",
+          data: existing,
+        });
+      }
+    }
+
+    const {
+      userId,
+      isDirect,
+      deliveryMethod,
+      shipping,
+      contactEmail,
+      shippingAddress: shippingAddressRaw,
+      directItems,
+    } = session.metadata || {};
+
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Session is missing order data" });
+    }
+
+    const shippingAddress = shippingAddressRaw
+      ? JSON.parse(shippingAddressRaw)
+      : null;
+    const shippingCost = Number(shipping) || 0;
+
+    const direct = isDirect === "true";
+    // Rebuild the items from the trusted session metadata.
+    const items = direct
+      ? await buildOrderItemsFromDirect(JSON.parse(directItems || "[]"))
+      : await buildOrderItemsFromCart(userId);
+
+    const totals = computeTotals(items, shippingCost);
+
+    // Capture the Stripe payment reference for refunds / reconciliation.
+    const paymentIntentId =
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : session.payment_intent?.id || "";
+
+    const order = await Order.create({
+      userId,
+      orderNumber: generateOrderNumber(),
+      contactEmail,
+      items,
+      shippingAddress,
+      deliveryMethod: deliveryMethod || "Standard",
+      subtotal: totals.subtotal,
+      shipping: totals.shipping,
+      taxes: totals.taxes,
+      total: totals.total,
+      status: "placed",
+      paymentStatus: "paid",
+      payment: {
+        provider: "stripe",
+        sessionId: session.id,
+        paymentIntentId,
+      },
+    });
+
+    // Decrement stock now that the order is confirmed paid.
+    await Promise.all(
+      items.map((item) =>
+        Product.updateOne(
+          {
+            _id: item.product,
+            "variants.color": item.color,
+            "variants.size": item.size,
+          },
+          { $inc: { "variants.$.stock": -item.quantity } }
+        )
+      )
+    );
+
+    // Clear the cart for cart-based checkouts (Buy now leaves it untouched).
+    if (!direct) {
+      const cart = await Cart.findOne({ userId });
+      if (cart) {
+        cart.items = [];
+        cart.subtotal = 0;
+        await cart.save();
+      }
+    }
+
+    // Tag the session so a retry/webhook can find this order again.
+    try {
+      await stripe.checkout.sessions.update(session.id, {
+        metadata: { ...(session.metadata || {}), orderId: String(order._id) },
+      });
+    } catch (metaErr) {
+      // Non-fatal: the order already exists; just log it.
+      console.error("Could not tag session metadata:", metaErr.message);
+    }
+
+    notifyOrderStatus(order);
+
+    return res.status(201).json({
+      success: true,
+      message: "Order confirmed successfully",
+      data: order,
+    });
+  } catch (err) {
+    console.error("confirmCheckout error:", {
+      type: err.type,
+      code: err.code,
+      message: err.message,
+      raw: err.raw?.message,
+    });
+    return res.status(err.statusCode || 500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// STRIPE WEBHOOK (post)
+// Backup path: if the browser never returns (closed tab), Stripe still tells us
+// the checkout completed so the order is created exactly once. Signature is
+// verified with STRIPE_WEBHOOK_SECRET; when that secret is unset the handler is
+// disabled (the success-redirect path still works).
+export const stripeWebhook = async (req, res) => {
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Stripe webhook secret not configured" });
+  }
+
+  let event;
+  try {
+    const stripe = getStripe();
+    const signature = req.headers["stripe-signature"];
+    event = stripe.webhooks.constructEvent(
+      req.body, // raw body — see express.raw() mount in index.js
+      signature,
+      webhookSecret
+    );
+  } catch (err) {
+    console.error("Stripe webhook signature error:", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      // Reuse the same confirmation logic via the shared metadata path.
+      if (session.payment_status === "paid" && session.metadata?.userId) {
+        const fakeReq = { body: { sessionId: session.id } };
+        let done = false;
+        const fakeRes = {
+          status() {
+            return this;
+          },
+          json() {
+            done = true;
+            return this;
+          },
+        };
+        await confirmCheckout(fakeReq, fakeRes);
+        if (done) {
+          return res.status(200).json({ received: true });
+        }
+      }
+    }
+    return res.status(200).json({ received: true });
+  } catch (err) {
+    console.error("Stripe webhook handling error:", err.message);
+    return res.status(500).json({ received: false });
+  }
 };
 
 // CREATE ORDER (post)

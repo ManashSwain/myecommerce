@@ -3,6 +3,8 @@ import {
   cancelMyOrder,
   cancelOrderAdmin,
   completeReplacement,
+  confirmCheckout,
+  createCheckoutSession,
   createOrder,
   createDirectOrder,
   dispatchReplacement,
@@ -16,6 +18,10 @@ import {
 } from "../Controllers/order.controller.js";
 
 const router = express.Router();
+
+// Stripe Checkout
+router.post("/create-checkout-session", createCheckoutSession);
+router.post("/confirm-checkout", confirmCheckout);
 
 router.post("/createorder", createOrder);
 // "Buy now" — orders explicit items without touching the cart

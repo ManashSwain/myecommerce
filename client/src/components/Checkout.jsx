@@ -10,7 +10,7 @@ import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import { API_BASE_URL } from "../constants";
 import { getCart, removeCartItem, updateCartQuantity } from "../utils/cart";
-import { createOrder, createDirectOrder } from "../utils/order";
+import { createCheckoutSession, confirmCheckout } from "../utils/order";
 
 
 
@@ -62,6 +62,10 @@ const Checkout = () => {
   const [selectedAddressId, setSelectedAddressId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [placingOrder, setPlacingOrder] = useState(false);
+
+  // Result banner shown after returning from Stripe's hosted checkout.
+  // status: "idle" | "verifying" | "success" | "canceled" | "error"
+  const [paymentResult, setPaymentResult] = useState({ status: "idle", message: "" });
 
   const [deliveryMethodId, setDeliveryMethodId] = useState(
     deliveryMethods[0].id,
@@ -137,6 +141,62 @@ const Checkout = () => {
 
     load();
   }, [isSignedIn, isLoaded, user?.id]);
+
+  // Handle the redirect back from Stripe's hosted checkout.
+  //  • ?success=true&session_id=... → verify payment server-side, then create
+  //    the order and send the shopper to their orders page.
+  //  • ?canceled=true              → let them know nothing was charged.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const cancelled = params.get("canceled");
+    const success = params.get("success");
+    const sessionId = params.get("session_id");
+
+    if (cancelled) {
+      setPaymentResult({
+        status: "canceled",
+        message:
+          "Payment canceled — you can continue shopping and check out when you're ready.",
+      });
+      return;
+    }
+
+    if (success) {
+      if (!sessionId) {
+        setPaymentResult({
+          status: "error",
+          message:
+            "We couldn't find your payment reference. If you were charged, contact support.",
+        });
+        return;
+      }
+      let active = true;
+      const verify = async () => {
+        setPaymentResult({ status: "verifying", message: "Confirming your payment…" });
+        try {
+          const order = await confirmCheckout(sessionId);
+          if (!active) return;
+          setPaymentResult({
+            status: "success",
+            message: `Order placed! Your order number is ${order.orderNumber}. A confirmation email is on its way.`,
+          });
+          // Cart-based orders clear the cart server-side.
+          window.dispatchEvent(new Event("cart-updated"));
+          toast.success("Payment successful — order placed!");
+        } catch (err) {
+          if (!active) return;
+          setPaymentResult({
+            status: "error",
+            message: err.message || "We could not confirm your payment.",
+          });
+        }
+      };
+      verify();
+      return () => {
+        active = false;
+      };
+    }
+  }, [location.search]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -237,37 +297,41 @@ const Checkout = () => {
 
     setPlacingOrder(true);
     try {
-      if (buyNow) {
-        // Direct order — cart is left untouched
-        await createDirectOrder({
-          userId: user.id,
-          contactEmail: form.email,
-          shippingAddress,
-          deliveryMethod: selectedDelivery.title,
-          shipping,
-          items: [
-            {
-              productId: buyNow.productId,
-              color: buyNow.color,
-              size: buyNow.size,
-              quantity: buyNow.quantity || 1,
-            },
-          ],
-        });
-      } else {
-        await createOrder({
-          userId: user.id,
-          contactEmail: form.email,
-          shippingAddress,
-          deliveryMethod: selectedDelivery.title,
-          shipping,
-        });
+      // Start a Stripe Checkout Session for this order, then hand the shopper
+      // off to Stripe's hosted payment page. The order itself is created by
+      // the backend once payment succeeds (on the ?success return trip).
+      const payload = buyNow
+        ? {
+            userId: user.id,
+            contactEmail: form.email,
+            shippingAddress,
+            deliveryMethod: selectedDelivery.title,
+            shipping,
+            items: [
+              {
+                productId: buyNow.productId,
+                color: buyNow.color,
+                size: buyNow.size,
+                quantity: buyNow.quantity || 1,
+              },
+            ],
+          }
+        : {
+            userId: user.id,
+            contactEmail: form.email,
+            shippingAddress,
+            deliveryMethod: selectedDelivery.title,
+            shipping,
+          };
+
+      const { url } = await createCheckoutSession(payload);
+      if (!url) {
+        throw new Error("Could not start checkout. Please try again.");
       }
-      toast.success("Order placed successfully!");
-      navigate("/orders");
+      // Full-page redirect to Stripe. We come back to /checkout?success=...
+      window.location.href = url;
     } catch (err) {
-      toast.error(err.message || "Could not place your order");
-    } finally {
+      toast.error(err.message || "Could not start checkout");
       setPlacingOrder(false);
     }
   };
@@ -291,6 +355,28 @@ const Checkout = () => {
     <div className="bg-gray-50">
       <div className="mx-auto max-w-2xl px-4 pt-16 pb-24 sm:px-6 lg:max-w-7xl lg:px-8">
         <h2 className="sr-only">Checkout</h2>
+
+        {/* Payment result banner (return from Stripe) */}
+        {paymentResult.status !== "idle" && (
+          <div
+            className={`mb-8 rounded-lg border px-4 py-3 text-sm ${
+              paymentResult.status === "success"
+                ? "border-green-200 bg-green-50 text-green-800"
+                : paymentResult.status === "canceled"
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : paymentResult.status === "verifying"
+                    ? "border-gray-200 bg-white text-gray-600"
+                    : "border-red-200 bg-red-50 text-red-800"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {paymentResult.status === "verifying" && (
+                <span className="size-2 animate-pulse rounded-full bg-gray-400" />
+              )}
+              <p>{paymentResult.message}</p>
+            </div>
+          </div>
+        )}
 
 
         <form

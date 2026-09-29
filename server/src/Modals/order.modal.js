@@ -145,6 +145,20 @@ const orderSchema = new mongoose.Schema(
       default: "paid",
     },
 
+    // External payment (currently Stripe) reference details, kept so refunds
+    // and reconciliation can find the original charge.
+    payment: {
+      provider: {
+        type: String,
+      },
+      sessionId: {
+        type: String,
+      },
+      paymentIntentId: {
+        type: String,
+      },
+    },
+
     // Populated when an order is cancelled (by the customer or an admin) and
     // updated again once the item is received back and the refund is processed.
     cancellation: {
