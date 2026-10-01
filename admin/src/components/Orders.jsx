@@ -85,6 +85,13 @@ const formatDate = (value) =>
     day: "numeric",
   });
 
+// Amounts are in Indian Rupees to match the storefront (cart/checkout use ₹).
+const formatCurrency = (value) =>
+  `₹${Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
 const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -393,7 +400,7 @@ const Orders = () => {
                       {formatDate(order.createdAt)}
                     </span>
                     <span className="text-sm font-medium text-gray-900">
-                      ${order.total.toFixed(2)}
+                      {formatCurrency(order.total)}
                     </span>
                   </div>
 
@@ -444,7 +451,7 @@ const Orders = () => {
                                 </p>
                               </div>
                               <p className="text-sm font-medium text-gray-900">
-                                ${(item.price * item.quantity).toFixed(2)}
+                                {formatCurrency(item.price * item.quantity)}
                               </p>
                             </li>
                           ))}
@@ -482,19 +489,19 @@ const Orders = () => {
                           <dl className="mt-2 space-y-1 text-sm text-gray-600">
                             <div className="flex justify-between">
                               <dt>Subtotal</dt>
-                              <dd>${order.subtotal.toFixed(2)}</dd>
+                              <dd>{formatCurrency(order.subtotal)}</dd>
                             </div>
                             <div className="flex justify-between">
                               <dt>Shipping</dt>
-                              <dd>${order.shipping.toFixed(2)}</dd>
+                              <dd>{formatCurrency(order.shipping)}</dd>
                             </div>
                             <div className="flex justify-between">
                               <dt>Taxes</dt>
-                              <dd>${order.taxes.toFixed(2)}</dd>
+                              <dd>{formatCurrency(order.taxes)}</dd>
                             </div>
                             <div className="flex justify-between border-t border-gray-200 pt-1 font-medium text-gray-900">
                               <dt>Total</dt>
-                              <dd>${order.total.toFixed(2)}</dd>
+                              <dd>{formatCurrency(order.total)}</dd>
                             </div>
                           </dl>
                           <p className="mt-2 text-xs text-gray-500">
@@ -588,7 +595,7 @@ const Orders = () => {
                                   ).replace("_", " ")}
                                 </span>
                                 {order.cancellation.refundAmount
-                                  ? ` · ${order.cancellation.refundAmount.toFixed(2)}`
+                                  ? ` · ${formatCurrency(order.cancellation.refundAmount)}`
                                   : ""}
                               </p>
                             </div>
@@ -797,7 +804,7 @@ const Orders = () => {
       <ConfirmModal
         open={!!refundTarget}
         title="Process refund"
-        message={`Process a refund of ${refundTarget?.total?.toFixed(2) ?? ""} for order ${refundTarget?.orderNumber}? This marks the refund as completed.`}
+        message={`Process a refund of ${formatCurrency(refundTarget?.total)} for order ${refundTarget?.orderNumber}? This marks the refund as completed.`}
         confirmLabel="Yes, process refund"
         tone="green"
         onConfirm={confirmRefund}

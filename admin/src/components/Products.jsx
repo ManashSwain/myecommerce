@@ -38,6 +38,13 @@ const totalStock = (product) =>
     product.stock || 0
   );
 
+// Amounts are in Indian Rupees to match the storefront (cart/checkout use ₹).
+const formatCurrency = (value) =>
+  `₹${Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
 function classNames(...classes) {
   return classes.filter(Boolean).join(" ");
 }
@@ -677,7 +684,7 @@ const Products = () => {
               </div>
               <div className="mt-2 flex items-center justify-between">
                 <p className="text-sm font-medium text-gray-900">
-                  ${product.price}
+                  {formatCurrency(product.price)}
                 </p>
                 <p
                   className={classNames(
