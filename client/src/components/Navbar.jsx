@@ -28,6 +28,7 @@ import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 
 import useAuth from "../customhooks/useAuth";
 import { Link } from "react-router";
+import logo from "../../assets/styloandcologo.png";
 import { toast } from "react-toastify";
 import { API_BASE_URL } from "../constants";
 import { apiFetch } from "../utils/api";
@@ -596,15 +597,18 @@ const Navbar = () => {
                 </button>
 
                 {/* Logo */}
-                <div className="ml-4 flex lg:ml-0">
-                  <a href="#">
-                    <span className="sr-only">Your Company</span>
+                <div className="ml-4 flex items-center gap-2 lg:ml-0">
+                  <Link to="/" className="flex items-center gap-2">
+                    <span className="sr-only">styloandco</span>
                     <img
-                      alt=""
-                      src="https://tailwindcss.com/plus-assets/img/logos/mark.svg?color=indigo&shade=600"
-                      className="h-8 w-auto"
+                      alt="styloandco"
+                      src={logo}
+                      className="h-9 w-auto"
                     />
-                  </a>
+                    <span className="hidden text-xl font-bold tracking-tight text-gray-900 sm:block">
+                      styloandco
+                    </span>
+                  </Link>
                 </div>
 
                 {/* Flyout menus */}

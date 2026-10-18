@@ -166,7 +166,12 @@ const Orderstatus = ({ order = {} }) => {
         h(
           Section,
           { style: header },
-          h(Text, { style: brand }, "~ Your Company")
+          h(Text, { style: brand }, "styloandco"),
+          h(
+            Text,
+            { style: brandTagline },
+            "Style That Speaks"
+          )
         ),
 
         // Status hero
@@ -388,7 +393,7 @@ const Orderstatus = ({ order = {} }) => {
           h(
             Text,
             { style: footerText },
-            `© ${new Date().getFullYear()} Your Company. All rights reserved.`
+            `© ${new Date().getFullYear()} styloandco. All rights reserved.`
           ),
           h(
             Text,
@@ -434,6 +439,13 @@ const brand = {
   color: "#ffffff",
   fontSize: 18,
   fontWeight: 700,
+};
+
+const brandTagline = {
+  margin: "2px 0 0",
+  color: "#e0e7ff",
+  fontSize: 12,
+  fontWeight: 500,
 };
 
 const eyebrow = {

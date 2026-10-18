@@ -110,7 +110,8 @@ const Orderstatus = ({ order = {} }) => {
         <Container style={container}>
           {/* Brand header */}
           <Section style={header}>
-            <Text style={brand}>~ Your Company</Text>
+            <Text style={brand}>styloandco</Text>
+            <Text style={brandTagline}>Style That Speaks</Text>
           </Section>
 
           {/* Status hero */}
@@ -264,7 +265,7 @@ const Orderstatus = ({ order = {} }) => {
           {/* Footer */}
           <Section style={footer}>
             <Text style={footerText}>
-              © {new Date().getFullYear()} Your Company. All rights reserved.
+              © {new Date().getFullYear()} styloandco. All rights reserved.
             </Text>
             <Text style={footerText}>
               This is an automated message about your order {orderNumber}.
@@ -305,6 +306,13 @@ const brand = {
   color: "#ffffff",
   fontSize: 18,
   fontWeight: 700,
+};
+
+const brandTagline = {
+  margin: "2px 0 0",
+  color: "#e0e7ff",
+  fontSize: 12,
+  fontWeight: 500,
 };
 
 const eyebrow = {

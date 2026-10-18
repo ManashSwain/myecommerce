@@ -9,9 +9,12 @@ const Contact = () => {
     <BackToHome />
   </div>
 <div className="mx-auto max-w-4xl space-y-6 px-4 pt-6 pb-16 text-gray-600 sm:px-6 sm:pb-24 lg:px-8">
-  <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-    Contact Us
-  </h2>
+  <div>
+    <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+      Contact Us
+    </h2>
+    <p className="text-sm font-medium text-gray-500">styloandco · Style That Speaks</p>
+  </div>
 
   <p className="text-lg leading-8">
     We'd love to hear from you!
@@ -32,10 +35,10 @@ const Contact = () => {
         <p>
           <span className="font-medium text-gray-900">Email:</span>{" "}
           <a
-            href="mailto:support@stylehub.com"
+            href="mailto:support@styloandco.com"
             className="break-all underline underline-offset-4 hover:text-gray-900"
           >
-            support@stylehub.com
+            support@styloandco.com
           </a>
         </p>
 
@@ -87,7 +90,7 @@ const Contact = () => {
   </p>
 
   <p className="font-medium text-gray-900">
-    Thank you for shopping with StyleHub!
+    Thank you for shopping with styloandco!
   </p>
 </div>
     </>

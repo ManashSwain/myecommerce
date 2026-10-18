@@ -1,5 +1,6 @@
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import logo from "../../assets/styloandcologo.png";
 
 import {
   Home,
@@ -28,7 +29,19 @@ const Sidebar = () => {
       <div className="w-64 shrink-0 bg-white border-r border-gray-300 flex flex-col justify-between h-screen">
         <div>
           {/* Logo */}
-          <div className="p-4 text-blue-600 font-bold text-xl">~</div>
+          <div className="p-4">
+            <NavLink to="/" className="flex items-center gap-2">
+              <img src={logo} className="h-9 w-auto" alt="styloandco" />
+              <span className="flex flex-col leading-tight">
+                <span className="text-lg font-bold text-blue-600">
+                  styloandco
+                </span>
+                <span className="text-xs font-medium text-gray-500">
+                  Style That Speaks
+                </span>
+              </span>
+            </NavLink>
+          </div>
 
           {/* Menu */}
           <div className="space-y-1 px-2">

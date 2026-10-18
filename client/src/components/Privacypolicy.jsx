@@ -9,12 +9,15 @@ const Privacypolicy = () => {
     <BackToHome />
   </div>
 <div className="mx-auto max-w-4xl space-y-6 px-4 pt-6 pb-16 text-gray-600 sm:px-6 sm:pb-24 lg:px-8">
-  <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-    Privacy Policy
-  </h2>
+  <div>
+    <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+      Privacy Policy
+    </h2>
+    <p className="text-sm font-medium text-gray-500">styloandco · Style That Speaks</p>
+  </div>
 
   <p className="leading-7">
-    At StyleHub, we respect your privacy and are committed
+    At styloandco, we respect your privacy and are committed
     to protecting your personal information.
   </p>
 
@@ -90,10 +93,10 @@ const Privacypolicy = () => {
       If you have questions about this Privacy Policy, please
       contact us at{" "}
       <a
-        href="mailto:support@stylehub.com"
+        href="mailto:support@styloandco.com"
         className="font-medium text-gray-900 underline underline-offset-4 hover:text-gray-600"
       >
-        support@stylehub.com
+        support@styloandco.com
       </a>.
     </p>
   </section>

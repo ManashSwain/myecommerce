@@ -1,4 +1,5 @@
 import React from "react";
+import logo from "../../assets/styloandcologo.png";
 
 const Navbar = () => {
   return (
@@ -6,16 +7,21 @@ const Navbar = () => {
       <nav className="bg-neutral-secondary-soft fixed w-full z-20 top-0 inset-s-0 border-b border-default">
         <div className="max-w-7xl flex-wrap items-center justify-between mx-auto p-4">
           <a
-            href="https://flowbite.com/"
+            href="/"
             className="flex items-center space-x-3 rtl:space-x-reverse"
           >
             <img
-              src="https://flowbite.com/docs/images/logo.svg"
-              className="h-7"
-              alt="Flowbite Logo"
+              src={logo}
+              className="h-8 w-auto"
+              alt="styloandco"
             />
-            <span className="self-center text-xl text-heading font-semibold whitespace-nowrap">
-              Flowbite
+            <span className="self-center flex flex-col leading-none">
+              <span className="text-xl text-heading font-bold whitespace-nowrap">
+                styloandco
+              </span>
+              <span className="text-xs text-body font-medium whitespace-nowrap">
+                Style That Speaks
+              </span>
             </span>
           </a>
           <button

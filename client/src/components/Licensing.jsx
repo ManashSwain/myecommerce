@@ -9,12 +9,15 @@ const Licensing = () => {
     <BackToHome />
   </div>
 <div className="mx-auto max-w-4xl space-y-6 px-4 pt-6 pb-16 text-gray-600 sm:px-6 sm:pb-24 lg:px-8">
-  <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-    Licensing
-  </h2>
+  <div>
+    <h2 className="text-3xl font-bold tracking-tight text-gray-900">
+      Licensing
+    </h2>
+    <p className="text-sm font-medium text-gray-500">styloandco · Style That Speaks</p>
+  </div>
 
   <p className="leading-7">
-    All content displayed on StyleHub, including text, logos,
+    All content displayed on styloandco, including text, logos,
     graphics, product descriptions, and website design
     elements, is provided for demonstration purposes.
   </p>
@@ -47,10 +50,10 @@ const Licensing = () => {
     <p className="text-sm leading-6">
       For licensing-related questions, please contact{" "}
       <a
-        href="mailto:support@stylehub.com"
+        href="mailto:support@styloandco.com"
         className="font-medium text-gray-900 underline underline-offset-4 hover:text-gray-600"
       >
-        support@stylehub.com
+        support@styloandco.com
       </a>.
     </p>
   </div>
