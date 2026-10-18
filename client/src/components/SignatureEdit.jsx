@@ -3,8 +3,8 @@ import { Link } from "react-router";
 import { API_BASE_URL } from "../constants";
 
 // Homepage "Most Loved Ones" banner.
-// The 4 product cards are the top-selling products of the current month,
-// computed server-side from real orders (no static / hardcoded data).
+// The 4 product cards are the all-time best-selling products (most units sold
+// overall), computed server-side from real orders (no static / hardcoded data).
 const CARD_LIMIT = 4;
 
 const formatPrice = (amount) => `$${Number(amount || 0)}`;
@@ -17,7 +17,7 @@ const SignatureEdit = () => {
     const fetchTopSelling = async () => {
       try {
         const res = await fetch(
-          `${API_BASE_URL}/api/products/topselling?limit=${CARD_LIMIT}&period=month`,
+          `${API_BASE_URL}/api/products/topselling?limit=${CARD_LIMIT}&period=all`,
         );
         const json = await res.json();
         if (res.ok && json.success !== false) {
