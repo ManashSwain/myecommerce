@@ -7,6 +7,7 @@ import useAuth from "../customhooks/useAuth";
 import Productreviews from "./Productreviews";
 import Sizechart from "./Sizechart";
 import { API_BASE_URL } from "../constants";
+import { apiFetch } from "../utils/api";
 import { getCart, updateCartQuantity, removeCartItem } from "../utils/cart";
 
 function classNames(...classes) {
@@ -143,7 +144,7 @@ const Productdetail = () => {
     setAdding(true);
     setFeedback({ type: "", message: "" });
     try {
-      const res = await fetch(`${API_BASE_URL}/api/cart/createcart`, {
+      const res = await apiFetch(`/api/cart/createcart`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -208,7 +209,7 @@ const Productdetail = () => {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/api/wishlist`, {
+      const res = await apiFetch(`/api/wishlist`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

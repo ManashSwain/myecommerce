@@ -16,20 +16,21 @@ import {
   requestReplacement,
   updateOrderStatus,
 } from "../Controllers/order.controller.js";
+import { requireActiveAccount } from "../middlewares/accountStatus.js";
 
 const router = express.Router();
 
 // Stripe Checkout
-router.post("/create-checkout-session", createCheckoutSession);
-router.post("/confirm-checkout", confirmCheckout);
+router.post("/create-checkout-session", requireActiveAccount, createCheckoutSession);
+router.post("/confirm-checkout", requireActiveAccount, confirmCheckout);
 
-router.post("/createorder", createOrder);
+router.post("/createorder", requireActiveAccount, createOrder);
 // "Buy now" — orders explicit items without touching the cart
-router.post("/createdirectorder", createDirectOrder);
-router.get("/getorders/:userId", getOrders);
+router.post("/createdirectorder", requireActiveAccount, createDirectOrder);
+router.get("/getorders/:userId", requireActiveAccount, getOrders);
 router.get("/getorder/:orderId", getOrderById);
 // Customer cancels their own order (only while placed/processing)
-router.patch("/cancel/:orderId", cancelMyOrder);
+router.patch("/cancel/:orderId", requireActiveAccount, cancelMyOrder);
 // Admin
 router.get("/getallorders", getAllOrders);
 router.patch("/updatestatus/:orderId", updateOrderStatus);

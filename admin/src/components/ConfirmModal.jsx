@@ -13,6 +13,7 @@ const ConfirmModal = ({
   onCancel,
   confirmLabel = "Yes, delete",
   tone = "red",
+  children,
 }) => {
   if (!open) return null;
 
@@ -44,6 +45,7 @@ const ConfirmModal = ({
         </div>
         <div className="px-6 py-4">
           <p className="text-sm text-gray-600">{message}</p>
+          {children}
         </div>
         <div className="flex justify-end gap-3 border-t border-gray-200 px-6 py-4">
           <button

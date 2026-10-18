@@ -85,8 +85,16 @@ export const getAllUsers = async (req, res) => {
 
     // Build the filter object from search + status.
     const filter = {};
-    if (status === "active") filter.isBlocked = { $ne: true };
+    // "Active" = has signed in at least once AND isn't blocked.
+    if (status === "active") {
+      filter.hasLoggedIn = true;
+      filter.isBlocked = { $ne: true };
+    }
     if (status === "blocked") filter.isBlocked = true;
+    if (status === "never") {
+      filter.hasLoggedIn = { $ne: true };
+      filter.isBlocked = { $ne: true };
+    }
 
     if (search) {
       // Escape regex specials so user input is matched literally.
@@ -111,10 +119,14 @@ export const getAllUsers = async (req, res) => {
       .lean();
 
     // ---- Summary stats (computed over ALL users, not just this page) ------
-    const [totalUsers, blockedUsers] = await Promise.all([
+    // Active = users who have logged in at least once, minus blocked ones.
+    const [totalUsers, blockedUsers, loggedInUsers] = await Promise.all([
       User.countDocuments({}),
       User.countDocuments({ isBlocked: true }),
+      User.countDocuments({ hasLoggedIn: true }),
     ]);
+    const activeUsers = Math.max(loggedInUsers - blockedUsers, 0);
+    const neverLoggedIn = Math.max(totalUsers - loggedInUsers, 0);
 
     // New sign-ups in the last 30 days.
     const thirtyDaysAgo = new Date();
@@ -154,6 +166,11 @@ export const getAllUsers = async (req, res) => {
         email: u.email_addresses,
         image: u.profile_image_url || "",
         isBlocked: !!u.isBlocked,
+        blockReason: u.blockReason || "",
+        blockedAt: u.blockedAt || null,
+        blockedBy: u.blockedBy || "",
+        hasLoggedIn: !!u.hasLoggedIn,
+        lastLoginAt: u.lastLoginAt || null,
         createdAt: u.createdAt,
         orderCount: stats?.orders || 0,
         totalSpent: Number((stats?.spent || 0).toFixed(2)),
@@ -173,7 +190,8 @@ export const getAllUsers = async (req, res) => {
       summary: {
         totalUsers,
         blockedUsers,
-        activeUsers: totalUsers - blockedUsers,
+        activeUsers,
+        neverLoggedIn,
         newUsers,
       },
     });
@@ -187,7 +205,12 @@ export const getAllUsers = async (req, res) => {
 };
 
 // BLOCK / UNBLOCK A USER (patch) — admin.
-// Body: { isBlocked: boolean }  (omit to toggle the current value)
+// Body: { isBlocked: boolean, reason?: string, blockedBy?: string }
+// `isBlocked` is optional; when omitted the current state is toggled.
+//
+// Every change is audited (who/when/why) and bumps `sessionVersion`, which
+// invalidates any live storefront session the moment an account is blocked —
+// the real-world "kill existing sessions" behaviour.
 export const toggleUserBlock = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -211,6 +234,23 @@ export const toggleUserBlock = async (req, res) => {
         : !user.isBlocked;
 
     user.isBlocked = next;
+
+    if (next) {
+      // Record the audit trail when blocking.
+      user.blockedAt = new Date();
+      user.blockReason = (req.body?.reason || "").trim() || "Policy violation";
+      user.blockedBy = req.body?.blockedBy || "admin";
+    } else {
+      // Clear the audit trail when unblocking (kept on the record only while
+      // the block is active).
+      user.blockedAt = undefined;
+      user.blockReason = undefined;
+      user.blockedBy = undefined;
+    }
+
+    // Bump the session version so stale sessions are rejected.
+    user.sessionVersion = (user.sessionVersion || 0) + 1;
+
     await user.save();
 
     return res.status(200).json({
@@ -219,10 +259,97 @@ export const toggleUserBlock = async (req, res) => {
       data: {
         _id: user._id,
         isBlocked: user.isBlocked,
+        blockReason: user.blockReason || "",
+        blockedAt: user.blockedAt || null,
+        sessionVersion: user.sessionVersion,
       },
     });
   } catch (err) {
     console.error("toggleUserBlock error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// TRACK LOGIN (post) — called by the storefront when a signed-in user loads.
+// Stamps lastLoginAt + hasLoggedIn so the admin can distinguish "registered"
+// from "actually signed in". Returns the current block/session status so the
+// client can react immediately (e.g. show the blocked screen).
+export const trackLogin = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "userId is required" });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { clerkId: userId },
+      { $set: { lastLoginAt: new Date(), hasLoggedIn: true } },
+      { new: true }
+    );
+
+    // Not registered yet (webhook lag) — the storefront keeps working.
+    if (!user) {
+      return res.status(200).json({
+        success: true,
+        data: { isBlocked: false, sessionVersion: 0, registered: false },
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        isBlocked: !!user.isBlocked,
+        blockReason: user.blockReason || "",
+        sessionVersion: user.sessionVersion || 0,
+        registered: true,
+      },
+    });
+  } catch (err) {
+    console.error("trackLogin error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// GET MY STATUS (get) — lightweight block check for the storefront.
+// Query: ?userId=<clerkId>
+export const getMyStatus = async (req, res) => {
+  try {
+    const userId = req.query.userId;
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "userId is required" });
+    }
+
+    const user = await User.findOne({ clerkId: userId })
+      .select("isBlocked blockReason sessionVersion")
+      .lean();
+
+    if (!user) {
+      return res
+        .status(200)
+        .json({ success: true, data: { isBlocked: false, registered: false } });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        isBlocked: !!user.isBlocked,
+        blockReason: user.blockReason || "",
+        sessionVersion: user.sessionVersion || 0,
+        registered: true,
+      },
+    });
+  } catch (err) {
+    console.error("getMyStatus error:", err);
     return res.status(500).json({
       success: false,
       message: err.message,

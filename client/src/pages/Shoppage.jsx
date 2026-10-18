@@ -23,6 +23,7 @@ import { toast } from "react-toastify";
 import BackToHome from "../components/BackToHome";
 import useAuth from "../customhooks/useAuth";
 import { API_BASE_URL } from "../constants";
+import { apiFetch } from "../utils/api";
 
 const sortOptions = [
   { id: "featured", name: "Featured" },
@@ -117,7 +118,7 @@ const Shoppage = () => {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/api/cart/createcart`, {
+      const res = await apiFetch(`/api/cart/createcart`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

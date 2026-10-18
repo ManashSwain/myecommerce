@@ -1,14 +1,17 @@
 import { API_BASE_URL } from "../constants";
+import { apiFetch } from "./api";
 
 // Shared cart API helpers — every mutation also notifies listeners
 // (e.g. the navbar badge) via the "cart-updated" window event.
+// All requests go through apiFetch so a blocked account surfaces the
+// "account blocked" modal globally.
 
 export const notifyCartUpdated = () =>
   window.dispatchEvent(new Event("cart-updated"));
 
 export const getCart = async (userId) => {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/cart/getcart/${userId}`);
+    const res = await apiFetch(`/api/cart/getcart/${userId}`);
     const json = await res.json();
     if (!res.ok || json.success === false) return null;
     return json.data;
@@ -18,7 +21,7 @@ export const getCart = async (userId) => {
 };
 
 export const updateCartQuantity = async (userId, item, quantity) => {
-  const res = await fetch(`${API_BASE_URL}/api/cart/updatecart/${userId}`, {
+  const res = await apiFetch(`/api/cart/updatecart/${userId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -37,7 +40,7 @@ export const updateCartQuantity = async (userId, item, quantity) => {
 };
 
 export const removeCartItem = async (userId, item) => {
-  const res = await fetch(`${API_BASE_URL}/api/cart/deletecart/${userId}`, {
+  const res = await apiFetch(`/api/cart/deletecart/${userId}`, {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

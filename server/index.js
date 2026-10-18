@@ -47,10 +47,11 @@ app.post(
   stripeWebhook
 );
 
+// Express middlewares — MUST be registered before the routers so JSON request
+// bodies (e.g. the block reason, cart items, orders) are parsed.
+app.use(express.json());
 // Route Middlewares
 app.use("/api", userrouter);
-// Express middlewares
-app.use(express.json());
 // Route Middlewares
 // categories middleware 
 app.use("/api/categories", categoryrouter);

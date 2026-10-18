@@ -5,16 +5,17 @@ import {
   getWishlist,
   deleteWishlist,
 } from "../Controllers/wishlist.controller.js";
+import { requireActiveAccount } from "../middlewares/accountStatus.js";
 
 const router = express.Router();
 
 // Add item
-router.post("/", createWishlist);
+router.post("/", requireActiveAccount, createWishlist);
 
 // Get user's wishlist
-router.get("/:userId", getWishlist);
+router.get("/:userId", requireActiveAccount, getWishlist);
 
 // Remove item
-router.delete("/:userId", deleteWishlist);
+router.delete("/:userId", requireActiveAccount, deleteWishlist);
 
 export default router;

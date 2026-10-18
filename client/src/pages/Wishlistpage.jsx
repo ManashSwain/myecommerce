@@ -6,6 +6,7 @@ import useAuth from "../customhooks/useAuth";
 import BackToHome from "../components/BackToHome";
 import { ProductGridSkeleton } from "../components/Loader";
 import { API_BASE_URL } from "../constants";
+import { apiFetch } from "../utils/api";
 
 const Wishlistpage = () => {
   const { isSignedIn, isLoaded, user } = useAuth();
@@ -14,7 +15,7 @@ const Wishlistpage = () => {
 
   const fetchWishlist = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/wishlist/${user.id}`);
+      const res = await apiFetch(`/api/wishlist/${user.id}`);
       const json = await res.json();
       if (res.status === 404) {
         // No wishlist yet — same as an empty one
@@ -42,7 +43,7 @@ const Wishlistpage = () => {
 
   const handleRemove = async (item) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/wishlist/${user.id}`, {
+      const res = await apiFetch(`/api/wishlist/${user.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -64,7 +65,7 @@ const Wishlistpage = () => {
 
   const handleAddToBag = async (item) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/cart/createcart`, {
+      const res = await apiFetch(`/api/cart/createcart`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

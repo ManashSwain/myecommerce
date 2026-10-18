@@ -33,13 +33,15 @@ export const getAllUsers = async ({
 };
 
 // Block or unblock a user. Pass `isBlocked` explicitly, or omit to toggle.
-export const setUserBlocked = async (userId, isBlocked) => {
+// `reason` is stored on the account and shown to the customer when blocked.
+export const setUserBlocked = async (userId, isBlocked, reason = "") => {
   const res = await fetch(`${API_BASE_URL}/api/block/${userId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(
-      typeof isBlocked === "boolean" ? { isBlocked } : {},
-    ),
+    body: JSON.stringify({
+      ...(typeof isBlocked === "boolean" ? { isBlocked } : {}),
+      ...(reason ? { reason } : {}),
+    }),
   });
   const json = await res.json();
   if (!res.ok || json.success === false) {

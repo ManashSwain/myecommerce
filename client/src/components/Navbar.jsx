@@ -30,6 +30,7 @@ import useAuth from "../customhooks/useAuth";
 import { Link } from "react-router";
 import { toast } from "react-toastify";
 import { API_BASE_URL } from "../constants";
+import { apiFetch } from "../utils/api";
 import { updateCartQuantity, removeCartItem } from "../utils/cart";
 import { MinusIcon, PlusIcon } from "@heroicons/react/24/outline";
 import Searchmodal from "./Searchmodal";
@@ -49,7 +50,7 @@ const Navbar = () => {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/api/cart/getcart/${user.id}`);
+      const res = await apiFetch(`/api/cart/getcart/${user.id}`);
       const json = await res.json();
       if (!res.ok || json.success === false) {
         setCart(null);
@@ -75,7 +76,7 @@ const Navbar = () => {
 
   const handleRemoveItem = async (item) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/cart/deletecart/${user.id}`, {
+      const res = await apiFetch(`/api/cart/deletecart/${user.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../constants";
+import { apiFetch } from "./api";
 
 // Parse a fetch response defensively. If the server returns a non-JSON body
 // (e.g. an HTML 404 because the route isn't registered on a stale server),
@@ -29,7 +30,7 @@ const readJson = async (res, fallbackMessage) => {
 // Start a Stripe Checkout Session for the given checkout payload (cart or
 // "Buy now" items). Returns the hosted Stripe URL the browser should go to.
 export const createCheckoutSession = async (payload) => {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE_URL}/api/order/create-checkout-session`,
     {
       method: "POST",
@@ -44,7 +45,7 @@ export const createCheckoutSession = async (payload) => {
 // After Stripe redirects back with ?success=true&session_id=..., ask the
 // backend to verify the payment and create the order. Returns the order.
 export const confirmCheckout = async (sessionId) => {
-  const res = await fetch(`${API_BASE_URL}/api/order/confirm-checkout`, {
+  const res = await apiFetch(`${API_BASE_URL}/api/order/confirm-checkout`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionId }),
@@ -56,7 +57,7 @@ export const confirmCheckout = async (sessionId) => {
 // Place an order from the checkout payload. The backend builds the order
 // from the user's cart and clears it on success.
 export const createOrder = async (payload) => {
-  const res = await fetch(`${API_BASE_URL}/api/order/createorder`, {
+  const res = await apiFetch(`${API_BASE_URL}/api/order/createorder`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -70,7 +71,7 @@ export const createOrder = async (payload) => {
 // "Buy now" — place an order for explicit items without touching the cart.
 // Unlike createOrder, the cart is left completely unaffected.
 export const createDirectOrder = async (payload) => {
-  const res = await fetch(`${API_BASE_URL}/api/order/createdirectorder`, {
+  const res = await apiFetch(`${API_BASE_URL}/api/order/createdirectorder`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -81,7 +82,7 @@ export const createDirectOrder = async (payload) => {
 
 export const getOrders = async (userId) => {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/order/getorders/${userId}`);
+    const res = await apiFetch(`${API_BASE_URL}/api/order/getorders/${userId}`);
     const json = await res.json();
     if (!res.ok || json.success === false) return [];
     return json.data || [];
@@ -93,7 +94,7 @@ export const getOrders = async (userId) => {
 // Cancel the signed-in user's own order. Only succeeds while the order is
 // still "placed" or "processing" — the backend rejects shipped/delivered.
 export const cancelOrder = async (orderId, userId, reason) => {
-  const res = await fetch(`${API_BASE_URL}/api/order/cancel/${orderId}`, {
+  const res = await apiFetch(`${API_BASE_URL}/api/order/cancel/${orderId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ userId, reason }),
@@ -105,7 +106,7 @@ export const cancelOrder = async (orderId, userId, reason) => {
 // Request a replacement (exchange, no money) for a delivered order. The
 // customer gets a new unit; the original is picked up and returned.
 export const requestReplacement = async (orderId, userId, reason) => {
-  const res = await fetch(
+  const res = await apiFetch(
     `${API_BASE_URL}/api/order/replacement/request/${orderId}`,
     {
       method: "PATCH",

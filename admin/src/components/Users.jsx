@@ -90,6 +90,7 @@ const Users = () => {
 
   // Block / unblock dialog
   const [blockTarget, setBlockTarget] = useState(null); // user object
+  const [blockReason, setBlockReason] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
 
   // Debounce search so we don't hit the API on every keystroke.
@@ -141,19 +142,26 @@ const Users = () => {
     const willBlock = !blockTarget.isBlocked;
     setActionBusy(true);
     try {
-      await setUserBlocked(blockTarget._id, willBlock);
+      await setUserBlocked(blockTarget._id, willBlock, blockReason.trim());
       toast.success(
         willBlock
           ? `${blockTarget.fullName} has been blocked`
           : `${blockTarget.fullName} has been unblocked`,
       );
       setBlockTarget(null);
+      setBlockReason("");
       await load(); // refresh list + stats
     } catch (err) {
       toast.error(err.message);
     } finally {
       setActionBusy(false);
     }
+  };
+
+  // Open the block dialog (reset any previous reason).
+  const openBlockDialog = (user) => {
+    setBlockReason("");
+    setBlockTarget(user);
   };
 
   // ----- Pagination window (1 … current ± 1 … last) ---------------------
@@ -207,7 +215,7 @@ const Users = () => {
         <StatCard
           label="Active"
           value={summary.activeUsers}
-          sub="Accounts in good standing"
+          sub={`Logged in at least once · ${summary.neverLoggedIn ?? 0} never signed in`}
           icon={CheckCircleIcon}
           tone="green"
         />
@@ -352,6 +360,12 @@ const Users = () => {
                       @{user.username}
                     </p>
                   )}
+                  {user.isBlocked && user.blockReason && (
+                    <p className="mt-1 truncate text-xs text-red-600">
+                      Reason: {user.blockReason}
+                      {user.blockedAt ? ` · ${formatDate(user.blockedAt)}` : ""}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -381,7 +395,7 @@ const Users = () => {
                 {/* Block / Unblock action */}
                 <button
                   type="button"
-                  onClick={() => setBlockTarget(user)}
+                  onClick={() => openBlockDialog(user)}
                   className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
                     user.isBlocked
                       ? "border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
@@ -480,13 +494,28 @@ const Users = () => {
         message={
           blockTarget?.isBlocked
             ? `Unblock ${blockTarget?.fullName}? They will be able to use their account again.`
-            : `Block ${blockTarget?.fullName}? They will no longer be able to use their account until unblocked.`
+            : `Block ${blockTarget?.fullName}? They will no longer be able to add to cart, place orders, or use account features.`
         }
         confirmLabel={blockTarget?.isBlocked ? "Yes, unblock" : "Yes, block"}
         tone={blockTarget?.isBlocked ? "green" : "red"}
         onConfirm={() => !actionBusy && confirmToggleBlock()}
         onCancel={() => !actionBusy && setBlockTarget(null)}
-      />
+      >
+        {blockTarget && !blockTarget.isBlocked && (
+          <label className="mt-4 block text-left">
+            <span className="text-sm font-medium text-gray-700">
+              Reason (shown to the customer)
+            </span>
+            <textarea
+              value={blockReason}
+              onChange={(e) => setBlockReason(e.target.value)}
+              rows={2}
+              placeholder="e.g. Repeated chargebacks, policy violation…"
+              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </label>
+        )}
+      </ConfirmModal>
     </div>
   );
 };
