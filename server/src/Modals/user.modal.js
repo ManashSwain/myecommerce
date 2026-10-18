@@ -23,8 +23,14 @@ const userSchema = new mongoose.Schema({
     },
     email_addresses : {
         type: String,
-        unique : true,
+        unique: true,
         required : true
+    },
+    // Admin-controlled suspension. A blocked user's account is disabled in the
+    // storefront; the admin Users panel can toggle this on and off.
+    isBlocked: {
+        type: Boolean,
+        default: false,
     }
 },{timestamps:true})
 
