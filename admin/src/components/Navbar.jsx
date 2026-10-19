@@ -1,103 +1,130 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
+import { useAuth0 } from "@auth0/auth0-react";
+import { LogOut, ChevronDown, UserRound } from "lucide-react";
 import logo from "../../assets/styloandcologo.png";
 
+// Top navigation bar for the admin panel.
+// Shows the brand on the left and the signed-in user's profile (loaded from
+// Auth0) on the right, with a dropdown containing logout.
 const Navbar = () => {
+  const { user, logout } = useAuth0();
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  // Close the dropdown when clicking outside of it.
+  useEffect(() => {
+    const onClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  const handleLogout = () =>
+    logout({
+      logoutParams: {
+        returnTo: `${window.location.origin}/logged-out`,
+      },
+    });
+  // Prefer the account name, fall back to the email local-part.
+  const displayName =
+    user?.name || user?.nickname || user?.email?.split("@")[0] || "Admin";
+  const initial = displayName.charAt(0).toUpperCase();
+
   return (
-    <>
-      <nav className="bg-neutral-secondary-soft fixed w-full z-20 top-0 inset-s-0 border-b border-default">
-        <div className="max-w-7xl flex-wrap items-center justify-between mx-auto p-4">
-          <a
-            href="/"
-            className="flex items-center space-x-3 rtl:space-x-reverse"
-          >
-            <img
-              src={logo}
-              className="h-8 w-auto"
-              alt="styloandco"
-            />
-            <span className="self-center flex flex-col leading-none">
-              <span className="text-xl text-heading font-bold whitespace-nowrap">
-                styloandco
-              </span>
-              <span className="text-xs text-body font-medium whitespace-nowrap">
+    <header className="fixed top-0 inset-x-0 z-30 h-16 border-b border-gray-200 bg-white">
+      <div className="flex h-full items-center justify-between px-4 sm:px-6">
+        {/* Brand */}
+        <a href="/" className="flex items-center gap-2">
+          <img src={logo} className="h-9 w-auto" alt="styloandco" />
+          <span className="flex flex-col leading-none">
+            <span className="text-lg font-bold text-blue-600">styloandco</span>
+            <span className="text-xs font-medium text-gray-500">
                 Style That Speaks
               </span>
             </span>
           </a>
+
+        {/* Profile + logout */}
+        <div className="relative" ref={menuRef}>
           <button
-            data-collapse-toggle="navbar-solid"
             type="button"
-            className="inline-flex items-center p-2 w-10 h-10 justify-center text-sm text-body rounded-base md:hidden hover:bg-neutral-secondary-soft hover:text-heading focus:outline-none focus:ring-2 focus:ring-neutral-tertiary"
-            aria-controls="navbar-solid"
-            aria-expanded="false"
+            onClick={() => setOpen((v) => !v)}
+            className="flex items-center gap-2 rounded-full border border-gray-200 py-1 pl-1 pr-3 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-haspopup="menu"
+            aria-expanded={open}
           >
-            <span className="sr-only">Open main menu</span>
-            <svg
-              className="w-6 h-6"
-              aria-hidden="true"
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeWidth="2"
-                d="M5 7h14M5 12h14M5 17h14"
+            {user?.picture ? (
+              <img
+                src={user.picture}
+                alt={displayName}
+                className="size-8 rounded-full object-cover"
+                referrerPolicy="no-referrer"
               />
-            </svg>
+            ) : (
+              <span className="flex size-8 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
+                {initial}
+              </span>
+            )}
+            <span className="hidden max-w-40 truncate text-sm font-medium text-gray-700 sm:block">
+              {displayName}
+            </span>
+            <ChevronDown
+              size={16}
+              className={`text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+            />
           </button>
-          <div className="hidden w-full md:block md:w-auto" id="navbar-solid">
-            <ul className="font-medium flex flex-col p-4 md:p-0 mt-4 border border-default rounded-base bg-neutral-secondary-soft md:flex-row md:space-x-8 rtl:space-x-reverse md:mt-0 md:border-0 md:bg-neutral-secondary-soft">
-              <li>
-                <a
-                  href="#"
-                  className="block py-2 px-3 text-white bg-brand rounded md:bg-transparent md:text-fg-brand md:p-0"
-                  aria-current="page"
-                >
-                  Home
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#"
-                  className="block py-2 px-3 text-heading rounded hover:bg-neutral-tertiary md:hover:bg-transparent md:border-0 md:hover:text-fg-brand md:p-0 md:dark:hover:bg-transparent"
-                >
-                  About
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#"
-                  className="block py-2 px-3 text-heading rounded hover:bg-neutral-tertiary md:hover:bg-transparent md:border-0 md:hover:text-fg-brand md:p-0 md:dark:hover:bg-transparent"
-                >
-                  Services
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#"
-                  className="block py-2 px-3 text-heading rounded hover:bg-neutral-tertiary md:hover:bg-transparent md:border-0 md:hover:text-fg-brand md:p-0 md:dark:hover:bg-transparent"
-                >
-                  Pricing
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#"
-                  className="block py-2 px-3 text-heading rounded hover:bg-neutral-tertiary md:hover:bg-transparent md:border-0 md:hover:text-fg-brand md:p-0 md:dark:hover:bg-transparent"
-                >
-                  Contact
-                </a>
-              </li>
-            </ul>
+
+          {open && (
+            <div
+              role="menu"
+              className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
+            >
+              {/* Profile details */}
+              <div className="flex items-center gap-3 border-b border-gray-100 px-4 py-3">
+                {user?.picture ? (
+                  <img
+                    src={user.picture}
+                    alt={displayName}
+                    className="size-10 rounded-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span className="flex size-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                    <UserRound size={20} />
+                  </span>
+                )}
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-gray-900">
+                    {displayName}
+                  </p>
+                  {user?.email && (
+                    <p className="truncate text-xs text-gray-500">
+                      {user.email}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Logout */}
+              <button
+                type="button"
+                role="menuitem"
+                onClick={handleLogout}
+                className="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-medium text-red-600 hover:bg-red-50"
+              >
+                <LogOut size={16} />
+                Log out
+              </button>
+            </div>
+          )}
           </div>
         </div>
-      </nav>
-    </>
+    </header>
   );
 };
 
 export default Navbar;
+

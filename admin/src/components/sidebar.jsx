@@ -1,7 +1,5 @@
 import React from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import logo from "../../assets/styloandcologo.png";
-
 import {
   Home,
   Users,
@@ -24,27 +22,12 @@ const menuItems = [
 
 const Sidebar = () => {
   return (
-    <div className="flex h-screen max-h-screen">
+    <div className="flex h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)]">
       {/* Sidebar */}
-      <div className="w-64 shrink-0 bg-white border-r border-gray-300 flex flex-col justify-between h-screen">
+      <div className="w-64 shrink-0 bg-white border-r border-gray-300 flex flex-col justify-between h-[calc(100vh-4rem)]">
         <div>
-          {/* Logo */}
-          <div className="p-4">
-            <NavLink to="/" className="flex items-center gap-2">
-              <img src={logo} className="h-9 w-auto" alt="styloandco" />
-              <span className="flex flex-col leading-tight">
-                <span className="text-lg font-bold text-blue-600">
-                  styloandco
-                </span>
-                <span className="text-xs font-medium text-gray-500">
-                  Style That Speaks
-                </span>
-              </span>
-            </NavLink>
-          </div>
-
           {/* Menu */}
-          <div className="space-y-1 px-2">
+          <div className="space-y-1 px-2 py-4">
             {menuItems.map(({ name, path, icon: Icon, end }) => (
               <NavLink
                 key={name}
@@ -67,7 +50,7 @@ const Sidebar = () => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 min-w-0 h-screen overflow-y-auto">
+      <div className="flex-1 min-w-0 h-[calc(100vh-4rem)] overflow-y-auto">
         <div className="px-6">
           <Outlet />
         </div>
@@ -77,4 +60,3 @@ const Sidebar = () => {
 };
 
 export default Sidebar;
-
