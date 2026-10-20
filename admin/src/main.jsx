@@ -12,7 +12,11 @@ createRoot(document.getElementById('root')).render(
     <Auth0Provider
       domain={authdomain}
       clientId={authclientid}
-      authorizationParams={{ redirect_uri: window.location.origin }}
+      authorizationParams={{
+        redirect_uri: window.location.origin,
+        // Email is needed by the server-side admin allow-list check.
+        scope: "openid profile email",
+      }}
     >
     <App />
     </Auth0Provider>

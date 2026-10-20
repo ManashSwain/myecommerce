@@ -8,11 +8,12 @@ import logo from "../../assets/styloandcologo.png";
 const LoggedOut = () => {
   const { loginWithRedirect } = useAuth0();
 
-  const login = () => loginWithRedirect({ appState: { returnTo: "/" } });
-  const signup = () =>
+  // Admin accounts are created by an existing admin, not through this page,
+  // so always land on the Auth0 login screen (never the sign-up screen).
+  const login = () =>
     loginWithRedirect({
       appState: { returnTo: "/" },
-      authorizationParams: { screen_hint: "signup" },
+      authorizationParams: { screen_hint: "login" },
     });
 
   return (
@@ -32,7 +33,7 @@ const LoggedOut = () => {
           You have been logged out. Sign in to continue managing the store.
         </p>
 
-        <div className="mt-8 flex flex-col gap-3">
+        <div className="mt-8">
           <button
             type="button"
             onClick={login}
@@ -40,17 +41,10 @@ const LoggedOut = () => {
           >
             Log in
           </button>
-          <button
-            type="button"
-            onClick={signup}
-            className="w-full rounded-md border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-          >
-            Create an account
-          </button>
         </div>
 
         <p className="mt-6 text-xs text-gray-400">
-          Access is restricted to authorised administrators.
+          Access is restricted to administrators added by an existing admin.
         </p>
       </div>
     </div>

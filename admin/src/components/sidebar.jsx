@@ -3,6 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import {
   Home,
   Users,
+  ShieldCheck,
   Folder,
   Calendar,
   FileText,
@@ -13,6 +14,7 @@ import {
 const menuItems = [
   { name: "Dashboard", path: "/", icon: Home, end: true },
   { name: "Users", path: "/users", icon: Users },
+  { name: "Admins", path: "/admins", icon: ShieldCheck },
   { name: "Categories", path: "/categories", icon: Folder },
   { name: "Sub categories", path: "/sub-categories", icon: Calendar },
   { name: "Products", path: "/products", icon: FileText },
