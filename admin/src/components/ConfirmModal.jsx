@@ -13,6 +13,7 @@ const ConfirmModal = ({
   onCancel,
   confirmLabel = "Yes, delete",
   tone = "red",
+  hideIcon = false,
   children,
 }) => {
   if (!open) return null;
@@ -60,7 +61,7 @@ const ConfirmModal = ({
             onClick={onConfirm}
             className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white ${confirmClasses}`}
           >
-            <Trash2 size={16} />
+            {!hideIcon && <Trash2 size={16} />}
             {confirmLabel}
           </button>
         </div>

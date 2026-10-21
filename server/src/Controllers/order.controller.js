@@ -51,44 +51,66 @@ const NON_CANCELLABLE_STATUSES = [
 const isCodOrder = (order) =>
   order.paymentMethod === "cod" || order.payment?.provider === "cod";
 
-// Put the ordered quantities back into product variant stock. Called when an
-// order is cancelled (the mirror of the decrement done at order time).
+// Put one line item's units back into product variant stock.
+const restockItem = (item) =>
+  Product.updateOne(
+    {
+      _id: item.product,
+      "variants.color": item.color,
+      "variants.size": item.size,
+    },
+    { $inc: { "variants.$.stock": item.quantity } }
+  );
+
+// Put the ordered quantities back into stock. Called when an order is
+// cancelled (the mirror of the decrement done at order time).
 const restockOrderItems = async (order) => {
   await Promise.all(
-    (order.items || [])
-      .filter((item) => item.product)
-      .map((item) =>
-        Product.updateOne(
-          {
-            _id: item.product,
-            "variants.color": item.color,
-            "variants.size": item.size,
-          },
-          { $inc: { "variants.$.stock": item.quantity } }
-        )
-      )
+    (order.items || []).filter((item) => item.product).map(restockItem)
   );
+};
+
+// Atomically take `quantity` units off one variant. The $elemMatch guard makes
+// the availability check and the decrement a single database operation, so two
+// concurrent orders can't both pass a stale read-time check and oversell.
+// Returns true when the units were reserved.
+const reserveItem = async (item) => {
+  const result = await Product.updateOne(
+    {
+      _id: item.product,
+      variants: {
+        $elemMatch: {
+          color: item.color,
+          size: item.size,
+          stock: { $gte: item.quantity },
+        },
+      },
+    },
+    { $inc: { "variants.$.stock": -item.quantity } }
+  );
+  return result.matchedCount > 0;
+};
+
+// Reserve every line of an order, one at a time. If a line can't be reserved,
+// put back the units already taken by this attempt and return that line so the
+// caller can tell the customer exactly what sold out. Returns null on success.
+const reserveOrderItems = async (items) => {
+  const reserved = [];
+  for (const item of (items || []).filter((line) => line.product)) {
+    if (await reserveItem(item)) {
+      reserved.push(item);
+      continue;
+    }
+    await Promise.all(reserved.map(restockItem));
+    return item;
+  }
+  return null;
 };
 
 // Remove one replacement unit per ordered item from stock. Called when a
 // replacement is dispatched (the mirror of restockOrderItems). Kept as its own
 // helper so replacement logic never reuses / mutates cancellation paths.
-const deductReplacementStock = async (order) => {
-  await Promise.all(
-    (order.items || [])
-      .filter((item) => item.product)
-      .map((item) =>
-        Product.updateOne(
-          {
-            _id: item.product,
-            "variants.color": item.color,
-            "variants.size": item.size,
-          },
-          { $inc: { "variants.$.stock": -item.quantity } }
-        )
-      )
-  );
-};
+const deductReplacementStock = (order) => reserveOrderItems(order.items);
 
 // Shared cancellation logic for both customer and admin cancellations.
 // `cancelledBy` is "user" or "admin"; `reason` is optional free text.
@@ -495,19 +517,18 @@ export const confirmCheckout = async (req, res) => {
       },
     });
 
-    // Decrement stock now that the order is confirmed paid.
-    await Promise.all(
-      items.map((item) =>
-        Product.updateOne(
-          {
-            _id: item.product,
-            "variants.color": item.color,
-            "variants.size": item.size,
-          },
-          { $inc: { "variants.$.stock": -item.quantity } }
-        )
-      )
-    );
+    // Reserve stock now that the order is confirmed paid. The guard prevents a
+    // concurrent order from driving the variant negative; if that happens the
+    // order must stay (the customer has already paid), so log it for manual
+    // fulfilment/refund instead of failing the confirmation.
+    const stockShortfall = await reserveOrderItems(items);
+    if (stockShortfall) {
+      console.error(
+        `Stock shortfall on paid order ${order.orderNumber}: ` +
+          `"${stockShortfall.title}" (${stockShortfall.color} / ${stockShortfall.size}) ` +
+          `x${stockShortfall.quantity}`
+      );
+    }
 
     // Clear the cart for cart-based checkouts (Buy now leaves it untouched).
     if (!direct) {
@@ -725,16 +746,18 @@ export const createOrder = async (req, res) => {
       payment: { provider: "cod" },
     });
 
-    // Reduce stock for the ordered variants now that the order is placed.
-    // Stock lives on each variant (matched by color + size).
-    await Promise.all(
-      items.map((item) =>
-        Product.updateOne(
-          { _id: item.product, "variants.color": item.color, "variants.size": item.size },
-          { $inc: { "variants.$.stock": -item.quantity } }
-        )
-      )
-    );
+    // Reserve stock for the ordered variants now that the order is placed.
+    // If another shopper took the last unit in the meantime, undo the partial
+    // reservation and remove the just-created order — no cash was collected,
+    // so failing here is safe.
+    const stockShortfall = await reserveOrderItems(items);
+    if (stockShortfall) {
+      await Order.findByIdAndDelete(order._id);
+      return res.status(409).json({
+        success: false,
+        message: `"${stockShortfall.title}" (${stockShortfall.color} / ${stockShortfall.size}) just went out of stock. Please review your cart and try again.`,
+      });
+    }
 
     // Clear the cart now that the order is placed
     cart.items = [];
@@ -888,15 +911,17 @@ export const createDirectOrder = async (req, res) => {
       payment: { provider: "cod" },
     });
 
-    // Reduce stock for the ordered variants now that the order is placed
-    await Promise.all(
-      items.map((item) =>
-        Product.updateOne(
-          { _id: item.product, "variants.color": item.color, "variants.size": item.size },
-          { $inc: { "variants.$.stock": -item.quantity } }
-        )
-      )
-    );
+    // Reserve stock for the ordered variants now that the order is placed.
+    // On a shortfall, undo the partial reservation and delete the order so the
+    // customer can retry with accurate availability.
+    const stockShortfall = await reserveOrderItems(items);
+    if (stockShortfall) {
+      await Order.findByIdAndDelete(order._id);
+      return res.status(409).json({
+        success: false,
+        message: `"${stockShortfall.title}" (${stockShortfall.color} / ${stockShortfall.size}) just went out of stock. Please try again.`,
+      });
+    }
 
     // NOTE: the user's cart is intentionally left untouched.
 
@@ -984,10 +1009,14 @@ export const getAllOrders = async (req, res) => {
 };
 
 // UPDATE ORDER STATUS (patch) — admin
+// Delivery and cash collection are separate facts. A COD order is only
+// "paid" when the admin explicitly confirms the courier collected the cash
+// (`collectCash: true`); delivering without that confirmation leaves the
+// payment pending so it can be recorded later.
 export const updateOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { status } = req.body;
+    const { status, collectCash, paymentReference = "" } = req.body;
     const allowed = ["placed", "processing", "shipped", "delivered"];
     if (!mongoose.isValidObjectId(orderId)) {
       return res
@@ -1000,23 +1029,61 @@ export const updateOrderStatus = async (req, res) => {
         message: `Status must be one of: ${allowed.join(", ")}`,
       });
     }
-    const order = await Order.findByIdAndUpdate(
-      orderId,
-      { status },
-      { new: true, runValidators: true }
-    );
+
+    const order = await Order.findById(orderId);
     if (!order) {
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
     }
 
+    // Orders that have left the normal fulfilment track must not be reopened
+    // through this generic status control.
+    if (
+      ["cancelled", "refunded", "return_in_transit"].includes(order.status) ||
+      String(order.status).startsWith("replacement_")
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This order is no longer on the normal fulfilment track and can't change status here.",
+      });
+    }
+
+    order.status = status;
+
+    let cashRecorded = false;
+    if (
+      status === "delivered" &&
+      collectCash === true &&
+      isCodOrder(order) &&
+      order.paymentStatus === "pending"
+    ) {
+      const existingPayment = order.payment?.toObject
+        ? order.payment.toObject()
+        : order.payment || {};
+      order.paymentStatus = "paid";
+      order.payment = {
+        ...existingPayment,
+        provider: "cod",
+        reference: paymentReference
+          ? String(paymentReference).trim()
+          : existingPayment.reference || "",
+        paidAt: new Date(),
+      };
+      cashRecorded = true;
+    }
+
+    await order.save();
+
     // Let the customer know their order status changed (non-blocking)
     notifyOrderStatus(order);
 
     return res.status(200).json({
       success: true,
-      message: "Order status updated successfully",
+      message: cashRecorded
+        ? "Order marked as delivered and cash collection recorded."
+        : "Order status updated successfully",
       data: order,
     });
   } catch (err) {
@@ -1384,8 +1451,15 @@ export const dispatchReplacement = async (req, res) => {
       return res.status(400).json({ success: false, message: stockIssue });
     }
 
-    // Take the replacement unit out of inventory.
-    await deductReplacementStock(order);
+    // Take the replacement unit out of inventory. The atomic guard closes the
+    // gap between validateReplacementStock above and this decrement.
+    const stockShortfall = await deductReplacementStock(order);
+    if (stockShortfall) {
+      return res.status(409).json({
+        success: false,
+        message: `"${stockShortfall.title}" (${stockShortfall.color} / ${stockShortfall.size}) is no longer available in the requested quantity. Restock it and try again.`,
+      });
+    }
 
     order.status = "replacement_out";
     order.replacement = {

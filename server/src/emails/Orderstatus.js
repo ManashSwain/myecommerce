@@ -373,7 +373,9 @@ const Orderstatus = ({ order = {} }) => {
                   order.payment?.provider === "cod"
                   ? order.paymentStatus === "paid"
                     ? "Cash on Delivery · paid"
-                    : ["cancelled", "return_in_transit"].includes(status)
+                    : ["cancelled", "return_in_transit", "delivered"].includes(
+                          status
+                        )
                       ? "Cash on Delivery · not collected"
                       : "Cash on Delivery · pay on delivery"
                   : "Card (Stripe)"

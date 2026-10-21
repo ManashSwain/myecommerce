@@ -88,9 +88,11 @@ const paymentStatusLabel = (order) => {
   const status = order.paymentStatus || "pending";
   if (isCodOrder(order)) {
     if (status === "pending") {
-      return ["cancelled", "return_in_transit"].includes(order.status)
-        ? "No payment collected"
-        : "Pay on delivery";
+      if (["cancelled", "return_in_transit"].includes(order.status)) {
+        return "No payment collected";
+      }
+      if (order.status === "delivered") return "Cash not collected";
+      return "Pay on delivery";
     }
     if (status === "paid") return "Cash collected";
   }

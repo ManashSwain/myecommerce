@@ -72,7 +72,9 @@ const paymentMethodLine = (order) => {
 const paymentStatusLine = (order) => {
   if (isCodOrder(order)) {
     if (order.paymentStatus === "pending") {
-      return ["cancelled", "return_in_transit"].includes(order.status)
+      return ["cancelled", "return_in_transit", "delivered"].includes(
+        order.status,
+      )
         ? "Not collected"
         : "Due on delivery";
     }

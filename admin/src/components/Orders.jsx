@@ -95,9 +95,11 @@ const paymentStatusLabel = (order) => {
   const status = order.paymentStatus || "pending";
   if (isCodOrder(order)) {
     if (status === "pending") {
-      return ["cancelled", "return_in_transit"].includes(order.status)
-        ? "No payment collected"
-        : "Cash due";
+      if (["cancelled", "return_in_transit"].includes(order.status)) {
+        return "No payment collected";
+      }
+      if (order.status === "delivered") return "Cash not collected";
+      return "Cash due";
     }
     if (status === "paid") return "Cash collected";
   }
@@ -193,7 +195,21 @@ const Orders = () => {
     setOpenId(null);
   };
 
-  const handleStatusChange = async (orderId, status) => {
+  const handleStatusChange = async (order, status) => {
+    // Delivering a COD order doesn't tell us whether the courier got the
+    // cash. Ask explicitly instead of guessing either way.
+    if (
+      status === "delivered" &&
+      isCodOrder(order) &&
+      (order.paymentStatus || "pending") === "pending"
+    ) {
+      setDeliveryTarget(order);
+      setCollectCash(true);
+      setPaymentReference("");
+      return;
+    }
+
+    const orderId = order._id;
     const previous = orders;
     // Optimistic update
     setOrders((prev) =>
@@ -201,7 +217,10 @@ const Orders = () => {
     );
     setUpdatingId(orderId);
     try {
-      await updateOrderStatus(orderId, status);
+      const updated = await updateOrderStatus(orderId, status);
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o))
+      );
       toast.success(`Order marked as ${status}`);
     } catch (err) {
       setOrders(previous); // rollback
@@ -218,7 +237,34 @@ const Orders = () => {
   const [paidTarget, setPaidTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [completeTarget, setCompleteTarget] = useState(null);
+  const [deliveryTarget, setDeliveryTarget] = useState(null);
+  const [collectCash, setCollectCash] = useState(true);
+  const [paymentReference, setPaymentReference] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+
+  const confirmDelivery = async () => {
+    if (!deliveryTarget) return;
+    setActionBusy(true);
+    try {
+      const updated = await updateOrderStatus(deliveryTarget._id, "delivered", {
+        collectCash,
+        paymentReference: paymentReference.trim(),
+      });
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o))
+      );
+      toast.success(
+        collectCash
+          ? `Order ${updated.orderNumber} delivered — cash collection recorded`
+          : `Order ${updated.orderNumber} delivered — cash still pending`
+      );
+      setDeliveryTarget(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const confirmDispatchReplacement = async () => {
     if (!dispatchTarget) return;
@@ -583,7 +629,9 @@ const Orders = () => {
 
                         <div>
                           <label className="block text-sm font-semibold text-gray-900">
-                            Update status
+                            {isLockedStatus(order.status)
+                              ? "Status"
+                              : "Update status"}
                           </label>
                           {isLockedStatus(order.status) ? (
                             <p
@@ -595,7 +643,10 @@ const Orders = () => {
                               {order.status === "return_in_transit" &&
                                 " — awaiting return"}
                               {order.status === "cancelled" &&
-                                " — awaiting refund"}
+                                (order.cancellation?.refundStatus ===
+                                "not_required"
+                                  ? " — no refund due"
+                                  : " — awaiting refund")}
                               {order.status === "refunded" && " — refund completed"}
                               {order.status === "replacement_requested" &&
                                 " — needs dispatch"}
@@ -609,7 +660,7 @@ const Orders = () => {
                               value={order.status}
                               disabled={updatingId === order._id}
                               onChange={(e) =>
-                                handleStatusChange(order._id, e.target.value)
+                                handleStatusChange(order, e.target.value)
                               }
                               className="mt-2 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none disabled:opacity-50"
                             >
@@ -861,6 +912,89 @@ const Orders = () => {
         </div>
         </>
       )}
+
+      <ConfirmModal
+        open={!!deliveryTarget}
+        title="Mark as delivered"
+        message={`Order ${deliveryTarget?.orderNumber} is Cash on Delivery (${formatCurrency(deliveryTarget?.total)}). Confirm whether the courier collected the cash.`}
+        confirmLabel={
+          collectCash ? "Deliver and record cash" : "Deliver with cash pending"
+        }
+        tone={collectCash ? "green" : "red"}
+        hideIcon
+        onConfirm={() => !actionBusy && confirmDelivery()}
+        onCancel={() => !actionBusy && setDeliveryTarget(null)}
+      >
+        <div className="mt-4 space-y-3">
+          <label
+            className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 ${
+              collectCash
+                ? "border-emerald-300 bg-emerald-50"
+                : "border-gray-200"
+            }`}
+          >
+            <input
+              type="radio"
+              name="cash-collected"
+              checked={collectCash}
+              onChange={() => setCollectCash(true)}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-900">
+                Cash collected
+              </span>
+              <span className="block text-xs text-gray-600">
+                The courier received the full amount.
+              </span>
+            </span>
+          </label>
+
+          <label
+            className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 ${
+              collectCash
+                ? "border-gray-200"
+                : "border-amber-300 bg-amber-50"
+            }`}
+          >
+            <input
+              type="radio"
+              name="cash-collected"
+              checked={!collectCash}
+              onChange={() => setCollectCash(false)}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-900">
+                Cash not collected
+              </span>
+              <span className="block text-xs text-gray-600">
+                Mark it delivered but leave payment pending.
+              </span>
+            </span>
+          </label>
+
+          {collectCash ? (
+            <label className="block">
+              <span className="text-sm font-medium text-gray-700">
+                Collection reference (optional)
+              </span>
+              <input
+                type="text"
+                value={paymentReference}
+                onChange={(e) => setPaymentReference(e.target.value)}
+                placeholder="e.g. courier receipt number"
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+              />
+            </label>
+          ) : (
+            <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              The order will show as delivered with “Cash not collected”. Use
+              “Mark cash collected” when the cash arrives.
+            </p>
+          )}
+        </div>
+      </ConfirmModal>
 
       <ConfirmModal
         open={!!cancelTarget}

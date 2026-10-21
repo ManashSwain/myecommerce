@@ -11,13 +11,13 @@ export const getAllOrders = async (status = "all") => {
   return json.data || [];
 };
 
-export const updateOrderStatus = async (orderId, status) => {
+export const updateOrderStatus = async (orderId, status, options = {}) => {
   const res = await fetch(
     `${API_BASE_URL}/api/order/updatestatus/${orderId}`,
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...options }),
     }
   );
   const json = await res.json();
