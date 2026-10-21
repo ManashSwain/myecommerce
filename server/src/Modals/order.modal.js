@@ -38,6 +38,39 @@ const orderItemSchema = new mongoose.Schema(
 );
 
 // Snapshot of the shipping address used for this order.
+// One line of a post-delivery return. Quantities can be partial, so the
+// customer can send back some units without returning the whole order.
+const returnItemSchema = new mongoose.Schema(
+  {
+    product: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
+    },
+    title: {
+      type: String,
+      required: true,
+    },
+    price: {
+      type: Number,
+      required: true,
+    },
+    color: {
+      type: String,
+      required: true,
+    },
+    size: {
+      type: String,
+      required: true,
+    },
+    quantity: {
+      type: Number,
+      required: true,
+      min: 1,
+    },
+  },
+  { _id: false }
+);
+
 const shippingAddressSchema = new mongoose.Schema(
   {
     fullName: { type: String, required: true },
@@ -116,7 +149,11 @@ const orderSchema = new mongoose.Schema(
     //   placed/processing cancelled  → cancelled         (stock back now)
     //   shipped cancelled            → return_in_transit (stock back only when
     //                                   the item physically reaches the store)
-    // Refund finishes an order: cancelled/return_in_transit → refunded
+    // Return after delivery:
+    //   delivered → return_requested → return_in_transit → return_received
+    //             → refunded (paid) | returned (nothing to refund)
+    // A rejected request goes back to delivered.
+    // Refund finishes a cancelled order: cancelled/return_in_transit → refunded
     // Replacement (exchange, no money) — only for delivered orders:
     //   delivered → replacement_requested → replacement_out → replacement_completed
     status: {
@@ -126,7 +163,10 @@ const orderSchema = new mongoose.Schema(
         "processing",
         "shipped",
         "delivered",
+        "return_requested",
         "return_in_transit",
+        "return_received",
+        "returned",
         "cancelled",
         "refunded",
         "replacement_requested",
@@ -264,6 +304,65 @@ const orderSchema = new mongoose.Schema(
       },
       // Admin note (e.g. courier details / condition on arrival).
       note: {
+        type: String,
+      },
+    },
+
+    // Post-delivery return / refund flow. Kept separate from `cancellation`
+    // (which happens before delivery) and `replacement` (an exchange, no
+    // money). The order status drives the workflow; this object stores the
+    // requested quantities, the computed refund, and each admin action.
+    return: {
+      requestedBy: {
+        type: String,
+        enum: ["user", "admin"],
+      },
+      reason: {
+        type: String,
+      },
+      requestedAt: {
+        type: Date,
+      },
+      // Snapshot of exactly what the customer is sending back. May be a
+      // subset of the order's items and quantities.
+      items: {
+        type: [returnItemSchema],
+        default: undefined,
+      },
+      // Computed when the request is raised: returned line totals plus a
+      // proportional share of tax; a full return also includes shipping.
+      refundAmount: {
+        type: Number,
+        default: 0,
+      },
+      // Money lifecycle after the parcel is received.
+      refundStatus: {
+        type: String,
+        enum: ["not_required", "pending", "completed"],
+        default: "not_required",
+      },
+      approvedAt: {
+        type: Date,
+      },
+      rejectedAt: {
+        type: Date,
+      },
+      rejectionReason: {
+        type: String,
+      },
+      // Set when the returned parcel physically reaches the store.
+      receivedAt: {
+        type: Date,
+      },
+      // True once the returned quantities have been added back to inventory.
+      stockRestored: {
+        type: Boolean,
+        default: false,
+      },
+      refundedAt: {
+        type: Date,
+      },
+      refundReference: {
         type: String,
       },
     },

@@ -36,9 +36,21 @@ const STEPS = [
 // Orders that have left the linear placed→delivered track are shown as a
 // simple headline + note instead of the 4-step progress bar.
 const TERMINAL_STATUSES = {
+  return_requested: {
+    label: "Return requested",
+    caption: "we've received your return request and are reviewing it",
+  },
   return_in_transit: {
     label: "Returning to us",
     caption: "your parcel is on its way back to our warehouse",
+  },
+  return_received: {
+    label: "Return received",
+    caption: "your returned items have reached us and your refund is being processed",
+  },
+  returned: {
+    label: "Return completed",
+    caption: "your return has been completed",
   },
   cancelled: { label: "Order cancelled", caption: "your order has been cancelled" },
   refunded: { label: "Order refunded", caption: "your refund has been processed" },
@@ -96,6 +108,81 @@ const formatDate = (value) =>
         day: "numeric",
       })
     : "";
+
+const isReturnOrder = (order) => Boolean(order.return?.requestedAt);
+
+const refundAmountFor = (order) =>
+  formatCurrency(
+    order.return?.refundAmount ??
+      order.cancellation?.refundAmount ??
+      order.total
+  );
+
+// Human-readable note for a terminal status. Returns and cancellations use
+// different records, so pick the right amount and wording.
+const paymentLineFor = (order) => {
+  const isCod =
+    order.paymentMethod === "cod" || order.payment?.provider === "cod";
+  if (!isCod) return "Card (Stripe)";
+  if (order.paymentStatus === "paid") return "Cash on Delivery · paid";
+  if (order.paymentStatus === "refund_pending") {
+    return "Cash on Delivery · refund pending";
+  }
+  if (order.paymentStatus === "refunded") {
+    return "Cash on Delivery · refunded";
+  }
+  return [
+    "cancelled",
+    "return_requested",
+    "return_in_transit",
+    "return_received",
+    "returned",
+    "delivered",
+  ].includes(order.status)
+    ? "Cash on Delivery · not collected"
+    : "Cash on Delivery · pay on delivery";
+};
+
+const returnNoteFor = (order, status) => {
+  if (REPLACEMENT_NOTES[status]) return REPLACEMENT_NOTES[status];
+
+  if (isReturnOrder(order)) {
+    if (status === "return_requested") {
+      return "We're reviewing your return request. We'll arrange pickup once it's approved — no refund has been issued yet.";
+    }
+    if (status === "return_in_transit") {
+      return order.return?.refundStatus === "not_required"
+        ? "No payment was collected for this order, so no refund is needed once your return reaches us."
+        : `Your return is on its way back to us. Once it reaches our warehouse we'll issue your refund of ${refundAmountFor(order)}.`;
+    }
+    if (status === "return_received") {
+      return `We've received your return and are processing your refund of ${refundAmountFor(order)}.`;
+    }
+    if (status === "returned") {
+      return "Your return is complete. No payment was collected, so no refund was needed.";
+    }
+    if (status === "refunded") {
+      return `A refund of ${refundAmountFor(order)} has been processed to your original payment method.`;
+    }
+  }
+
+  if (order.cancellation?.refundStatus === "not_required") {
+    return "No payment was collected for this order, so no refund is needed.";
+  }
+  if (status === "refunded") {
+    return `A refund of ${formatCurrency(
+      order.cancellation?.refundAmount || order.total
+    )} has been processed to your original payment method.`;
+  }
+  if (status === "return_in_transit") {
+    return `Your parcel is on its way back to us. Once it reaches our warehouse we'll restore it to stock and issue your refund of ${formatCurrency(
+      order.cancellation?.refundAmount || order.total
+    )}.`;
+  }
+  return `A refund of ${formatCurrency(
+    order.cancellation?.refundAmount || order.total
+  )} is being processed and will reach your account shortly.`;
+};
 
 // A tracking step: a coloured connector bar + label, laid out in a table cell.
 const StepCell = ({ index, current, isFirst, isLast }) => {
@@ -195,25 +282,7 @@ const Orderstatus = ({ order = {} }) => {
           ? h(
               Section,
               { style: { padding: "8px 32px 0" } },
-              h(
-                Text,
-                { style: refundNote },
-                REPLACEMENT_NOTES[status]
-                  ? REPLACEMENT_NOTES[status]
-                  : order.cancellation?.refundStatus === "not_required"
-                    ? "No payment was collected for this order, so no refund is needed."
-                    : status === "refunded"
-                      ? `A refund of ${formatCurrency(
-                          order.cancellation?.refundAmount || total
-                        )} has been processed to your original payment method.`
-                      : status === "return_in_transit"
-                        ? `Your parcel is on its way back to us. Once it reaches our warehouse we'll restore it to stock and issue your refund of ${formatCurrency(
-                            order.cancellation?.refundAmount || total
-                          )}.`
-                        : `A refund of ${formatCurrency(
-                            order.cancellation?.refundAmount || total
-                          )} is being processed and will reach your account shortly.`
-              )
+              h(Text, { style: refundNote }, returnNoteFor(order, status))
             )
           : // Progress tracker (only for active orders)
             h(
@@ -366,20 +435,7 @@ const Orderstatus = ({ order = {} }) => {
               h(Text, { style: addressLine }, contactEmail),
               h(Text, { style: addressLine }, shippingAddress.phone),
               h(Text, { style: addressLine }, `${deliveryMethod} delivery`),
-              h(
-                Text,
-                { style: addressLine },
-                order.paymentMethod === "cod" ||
-                  order.payment?.provider === "cod"
-                  ? order.paymentStatus === "paid"
-                    ? "Cash on Delivery · paid"
-                    : ["cancelled", "return_in_transit", "delivered"].includes(
-                          status
-                        )
-                      ? "Cash on Delivery · not collected"
-                      : "Cash on Delivery · pay on delivery"
-                  : "Card (Stripe)"
-              )
+              h(Text, { style: addressLine }, paymentLineFor(order))
             )
           )
         ),

@@ -38,7 +38,10 @@ const generateOrderNumber = () =>
 const NON_CANCELLABLE_STATUSES = [
   "shipped",
   "delivered",
+  "return_requested",
   "return_in_transit",
+  "return_received",
+  "returned",
   "cancelled",
   "refunded",
   "replacement_requested",
@@ -1040,7 +1043,14 @@ export const updateOrderStatus = async (req, res) => {
     // Orders that have left the normal fulfilment track must not be reopened
     // through this generic status control.
     if (
-      ["cancelled", "refunded", "return_in_transit"].includes(order.status) ||
+      [
+        "cancelled",
+        "refunded",
+        "return_requested",
+        "return_in_transit",
+        "return_received",
+        "returned",
+      ].includes(order.status) ||
       String(order.status).startsWith("replacement_")
     ) {
       return res.status(400).json({
@@ -1196,7 +1206,10 @@ export const cancelOrderAdmin = async (req, res) => {
     if (
       [
         "delivered",
+        "return_requested",
         "return_in_transit",
+        "return_received",
+        "returned",
         "cancelled",
         "refunded",
         "replacement_requested",
@@ -1208,10 +1221,14 @@ export const cancelOrderAdmin = async (req, res) => {
         success: false,
         message:
           order.status === "return_in_transit"
-            ? "This order is already on its way back. Receive the return to restock it."
-            : order.status.startsWith("replacement")
-              ? "This order is in a replacement flow and cannot be cancelled."
-              : `An order that is already ${order.status} cannot be cancelled.`,
+            ? order.return?.requestedAt
+              ? "This return is already on its way back. Receive the items to restock them."
+              : "This order is already on its way back. Receive the return to restock it."
+            : order.status.startsWith("return")
+              ? "This order is in a return flow and cannot be cancelled."
+              : order.status.startsWith("replacement")
+                ? "This order is in a replacement flow and cannot be cancelled."
+                : `An order that is already ${order.status} cannot be cancelled.`,
       });
     }
 
@@ -1267,6 +1284,16 @@ export const receiveReturn = async (req, res) => {
           order.cancellation?.stockRestored
             ? "This return has already been received and restocked."
             : "Only an order that is return-in-transit can be received.",
+      });
+    }
+
+    // A customer return uses its own receipt endpoint so only the requested
+    // quantities are restocked and the return/refund record is kept.
+    if (order.return?.requestedAt) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "This is a customer return — use the return receipt action instead.",
       });
     }
 
@@ -1550,9 +1577,359 @@ export const completeReplacement = async (req, res) => {
   }
 };
 
+// --- RETURNS AFTER DELIVERY ------------------------------------------------
+// Separate from cancellation (pre-delivery) and replacement (exchange):
+//   return_requested → return_in_transit → return_received → refunded
+//                                       ↘ returned (unpaid COD — nothing to refund)
+// A rejected request returns the order to "delivered". Requests may cover only
+// some of the ordered units, and only those units are restocked and refunded.
+
+const returnObject = (order) =>
+  order.return?.toObject ? order.return.toObject() : order.return || {};
+
+const itemKey = (item) => `${item.product}|${item.color}|${item.size}`;
+
+// Validate the requested quantities against what was actually purchased and
+// build the snapshot stored on the order.
+const normalizeReturnItems = (order, rawItems) => {
+  if (!Array.isArray(rawItems) || rawItems.length === 0) {
+    return { error: "Select at least one item to return." };
+  }
+
+  const purchased = new Map();
+  for (const item of order.items || []) {
+    const key = itemKey(item);
+    const existing = purchased.get(key);
+    if (existing) {
+      existing.quantity += item.quantity;
+    } else {
+      purchased.set(key, {
+        product: item.product,
+        title: item.title,
+        price: item.price,
+        color: item.color,
+        size: item.size,
+        quantity: item.quantity,
+      });
+    }
+  }
+
+  const requested = new Map();
+  for (const raw of rawItems) {
+    const key = itemKey(raw);
+    const line = purchased.get(key);
+    if (!line) {
+      return { error: "One of the selected items is not part of this order." };
+    }
+    const quantity = Number(raw.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      return {
+        error: `Choose a whole-number return quantity of at least 1 for "${line.title}".`,
+      };
+    }
+    requested.set(key, (requested.get(key) || 0) + quantity);
+  }
+
+  const items = [];
+  for (const [key, quantity] of requested) {
+    const line = purchased.get(key);
+    if (quantity > line.quantity) {
+      return {
+        error: `You can return at most ${line.quantity} of "${line.title}".`,
+      };
+    }
+    items.push({ ...line, quantity });
+  }
+  return { items };
+};
+
+// Refund value of the returned lines. A full return refunds the entire order
+// (including shipping); a partial return refunds the returned line totals plus
+// their proportional share of tax, but not the original shipping.
+const computeReturnRefund = (order, returnItems) => {
+  const purchased = new Map();
+  for (const item of order.items || []) {
+    const key = itemKey(item);
+    purchased.set(key, (purchased.get(key) || 0) + item.quantity);
+  }
+  const requested = new Map();
+  for (const item of returnItems) {
+    const key = itemKey(item);
+    requested.set(key, (requested.get(key) || 0) + item.quantity);
+  }
+  const isFullReturn =
+    requested.size === purchased.size &&
+    [...purchased].every(([key, quantity]) => requested.get(key) === quantity);
+
+  if (isFullReturn) return Number(order.total.toFixed(2));
+
+  const itemsSubtotal = returnItems.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const taxShare =
+    order.subtotal > 0 ? order.taxes * (itemsSubtotal / order.subtotal) : 0;
+  return Number(Math.min(order.total, itemsSubtotal + taxShare).toFixed(2));
+};
+
+// REQUEST RETURN (patch) — customer.
+// Only the owner, only a delivered order, and only quantities they actually
+// bought. The request waits for admin approval.
+export const requestReturn = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { userId, reason, items: rawItems } = req.body;
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "userId is required" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+    if (order.userId !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only request a return for your own orders",
+      });
+    }
+    if (order.status !== "delivered") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "A return can only be requested after the order has been delivered.",
+      });
+    }
+
+    const trimmedReason = String(reason || "").trim();
+    if (!trimmedReason) {
+      return res.status(400).json({
+        success: false,
+        message: "Tell us why you're returning these items.",
+      });
+    }
+
+    const { items: returnItems, error } = normalizeReturnItems(
+      order,
+      rawItems
+    );
+    if (error) {
+      return res.status(400).json({ success: false, message: error });
+    }
+
+    order.status = "return_requested";
+    order.return = {
+      requestedBy: "user",
+      reason: trimmedReason,
+      requestedAt: new Date(),
+      items: returnItems,
+      refundAmount: computeReturnRefund(order, returnItems),
+      // Money is only actually due after the parcel is received; unpaid COD
+      // orders will never need a refund.
+      refundStatus: order.paymentStatus === "paid" ? "pending" : "not_required",
+      stockRestored: false,
+    };
+    await order.save();
+
+    notifyOrderStatus(order);
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Return requested. We'll review it and arrange pickup once it's approved.",
+      data: order,
+    });
+  } catch (err) {
+    console.error("requestReturn error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// APPROVE RETURN (patch) — admin. The customer can now send the items back.
+export const approveReturn = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+    if (order.status !== "return_requested" || !order.return?.requestedAt) {
+      return res.status(400).json({
+        success: false,
+        message: "This order has no pending return request to approve.",
+      });
+    }
+
+    order.status = "return_in_transit";
+    order.return = {
+      ...returnObject(order),
+      approvedAt: new Date(),
+    };
+    await order.save();
+
+    notifyOrderStatus(order);
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Return approved. The refund will be processed once the items are received.",
+      data: order,
+    });
+  } catch (err) {
+    console.error("approveReturn error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// REJECT RETURN (patch) — admin. The order returns to delivered.
+export const rejectReturn = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { reason } = req.body;
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+    const rejectionReason = String(reason || "").trim();
+    if (!rejectionReason) {
+      return res.status(400).json({
+        success: false,
+        message: "A rejection reason is required.",
+      });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+    if (order.status !== "return_requested" || !order.return?.requestedAt) {
+      return res.status(400).json({
+        success: false,
+        message: "This order has no pending return request to reject.",
+      });
+    }
+
+    order.status = "delivered";
+    order.return = {
+      ...returnObject(order),
+      rejectedAt: new Date(),
+      rejectionReason,
+      refundStatus: "not_required",
+    };
+    await order.save();
+
+    notifyOrderStatus(order);
+
+    return res.status(200).json({
+      success: true,
+      message: "Return request rejected. The order remains delivered.",
+      data: order,
+    });
+  } catch (err) {
+    console.error("rejectReturn error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// RECEIVE RETURNED ITEMS (patch) — admin.
+// The parcel is back at the store: restock the returned quantities (unless the
+// items aren't resellable), then queue a refund if the order was paid. An
+// unpaid COD order needs no refund and closes as "returned".
+export const receiveReturnedItems = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { restock } = req.body || {};
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+    if (order.status !== "return_in_transit" || !order.return?.requestedAt) {
+      return res.status(400).json({
+        success: false,
+        message: order.return?.receivedAt
+          ? "This return has already been received."
+          : "This order has no approved return to receive.",
+      });
+    }
+
+    const shouldRestock = restock !== false;
+    if (shouldRestock) {
+      await Promise.all(
+        (order.return.items || [])
+          .filter((item) => item.product)
+          .map(restockItem)
+      );
+    }
+
+    const hasRefundablePayment = order.paymentStatus === "paid";
+    order.return = {
+      ...returnObject(order),
+      receivedAt: new Date(),
+      stockRestored: shouldRestock,
+      refundStatus: hasRefundablePayment ? "pending" : "not_required",
+    };
+
+    if (hasRefundablePayment) {
+      order.status = "return_received";
+      order.paymentStatus = "refund_pending";
+    } else {
+      order.status = "returned";
+    }
+    await order.save();
+
+    notifyOrderStatus(order);
+
+    return res.status(200).json({
+      success: true,
+      message: hasRefundablePayment
+        ? shouldRestock
+          ? "Return received and stock restored — you can now process the refund."
+          : "Return received (not restocked) — you can now process the refund."
+        : "Return received. No payment was collected, so no refund is due.",
+      data: order,
+    });
+  } catch (err) {
+    console.error("receiveReturnedItems error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // REFUND ORDER (patch) — admin.
-// Marks a cancelled order's refund as completed. Optionally accepts a
-// refund reference (transaction id) and amount; defaults to the order total.
+// Completes either a cancellation refund or a received return refund.
+// Optionally accepts a refund reference (transaction id) and amount; defaults
+// to the cancellation total or the return's computed refund.
 //
 // For orders that were cancelled AFTER shipping, the return must have been
 // received first (status "cancelled" with stockRestored=true) — we never
@@ -1578,15 +1955,100 @@ export const refundOrder = async (req, res) => {
     if (order.status === "return_in_transit") {
       return res.status(400).json({
         success: false,
-        message:
-          "This order is still on its way back. Receive the return before refunding.",
+        message: order.return?.requestedAt
+          ? "This return is still on its way back. Receive the items before refunding."
+          : "This order is still on its way back. Receive the return before refunding.",
       });
     }
 
-    if (order.status !== "cancelled" && order.status !== "refunded") {
+    // A return refund never falls through to the cancellation branch: once a
+    // return is refunded the order is "refunded", which the cancellation path
+    // would otherwise accept and refund a second time.
+    if (order.return?.requestedAt) {
+      if (order.return.refundStatus === "completed") {
+        return res.status(400).json({
+          success: false,
+          message: "This return has already been refunded.",
+        });
+      }
+      if (order.return.refundStatus === "not_required") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "No payment was collected for this order, so there is nothing to refund.",
+        });
+      }
+      if (order.status !== "return_received") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Receive the returned items before processing the refund.",
+        });
+      }
+    }
+
+    const isReturnRefund =
+      order.status === "return_received" && order.return?.requestedAt;
+
+    if (!isReturnRefund && !["cancelled", "refunded"].includes(order.status)) {
       return res.status(400).json({
         success: false,
-        message: "Only a cancelled order can be refunded.",
+        message:
+          "Only a cancelled order or a received return can be refunded.",
+      });
+    }
+
+    if (isReturnRefund) {
+      if (order.return?.refundStatus === "completed") {
+        return res.status(400).json({
+          success: false,
+          message: "This return has already been refunded.",
+        });
+      }
+      if (order.return?.refundStatus === "not_required") {
+        return res.status(400).json({
+          success: false,
+          message:
+            "No payment was collected for this order, so there is nothing to refund.",
+        });
+      }
+
+      const expectedRefund = Number(order.return?.refundAmount || 0);
+      const refundAmount =
+        amount !== undefined && amount !== null && amount !== ""
+          ? Number(amount)
+          : expectedRefund;
+
+      if (Number.isNaN(refundAmount) || refundAmount < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Refund amount must be a positive number",
+        });
+      }
+      if (refundAmount > expectedRefund) {
+        return res.status(400).json({
+          success: false,
+          message: `The refund cannot exceed the return amount of ${expectedRefund}.`,
+        });
+      }
+
+      order.status = "refunded";
+      order.paymentStatus = "refunded";
+      order.return = {
+        ...returnObject(order),
+        refundStatus: "completed",
+        refundAmount,
+        refundedAt: new Date(),
+        refundReference: refundReference || "",
+      };
+      await order.save();
+
+      notifyOrderStatus(order);
+
+      return res.status(200).json({
+        success: true,
+        message: "Return refund processed successfully",
+        data: order,
       });
     }
 
@@ -1686,7 +2148,15 @@ export const markOrderPaid = async (req, res) => {
       });
     }
 
-    if (["cancelled", "refunded", "return_in_transit"].includes(order.status)) {
+    if (
+      [
+        "cancelled",
+        "refunded",
+        "return_in_transit",
+        "return_received",
+        "returned",
+      ].includes(order.status)
+    ) {
       return res.status(400).json({
         success: false,
         message: "A cancelled or returned order can't be marked as paid.",

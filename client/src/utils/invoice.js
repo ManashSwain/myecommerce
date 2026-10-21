@@ -36,7 +36,10 @@ const formatDate = (value) => {
 
 // Map internal status / payment status to friendly invoice wording.
 const STATUS_LABELS = {
+  return_requested: "Return requested",
   return_in_transit: "Returning to us",
+  return_received: "Return received",
+  returned: "Return completed",
   replacement_requested: "Replacement requested",
   replacement_out: "Replacement on its way",
   replacement_completed: "Replacement completed",
@@ -72,9 +75,14 @@ const paymentMethodLine = (order) => {
 const paymentStatusLine = (order) => {
   if (isCodOrder(order)) {
     if (order.paymentStatus === "pending") {
-      return ["cancelled", "return_in_transit", "delivered"].includes(
-        order.status,
-      )
+      return [
+        "cancelled",
+        "return_requested",
+        "return_in_transit",
+        "return_received",
+        "returned",
+        "delivered",
+      ].includes(order.status)
         ? "Not collected"
         : "Due on delivery";
     }
@@ -298,7 +306,10 @@ export const downloadInvoice = (order) => {
     order.paymentStatus === "refund_pending" ||
     order.paymentStatus === "refunded"
   ) {
-    const refundAmount = order.cancellation?.refundAmount ?? order.total;
+    const refundAmount =
+      order.return?.refundAmount ??
+      order.cancellation?.refundAmount ??
+      order.total;
     y += 2;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);

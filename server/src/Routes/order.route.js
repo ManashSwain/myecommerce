@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  approveReturn,
   cancelMyOrder,
   cancelOrderAdmin,
   completeReplacement,
@@ -12,9 +13,12 @@ import {
   getOrderById,
   getOrders,
   markOrderPaid,
+  receiveReturnedItems,
   receiveReturn,
   refundOrder,
+  rejectReturn,
   requestReplacement,
+  requestReturn,
   updateOrderStatus,
 } from "../Controllers/order.controller.js";
 import { requireActiveAccount } from "../middlewares/accountStatus.js";
@@ -47,6 +51,13 @@ router.patch("/admin/markpaid/:orderId", markOrderPaid);
 router.patch("/replacement/request/:orderId", requestReplacement);
 router.patch("/admin/replacement/dispatch/:orderId", dispatchReplacement);
 router.patch("/admin/replacement/complete/:orderId", completeReplacement);
+
+// Returns after delivery (partial or full). Customer raises a request; an
+// admin approves/rejects it, receives the parcel, then processes the refund.
+router.patch("/return/request/:orderId", requireActiveAccount, requestReturn);
+router.patch("/admin/return/approve/:orderId", approveReturn);
+router.patch("/admin/return/reject/:orderId", rejectReturn);
+router.patch("/admin/return/receive/:orderId", receiveReturnedItems);
 
 export default router;
 

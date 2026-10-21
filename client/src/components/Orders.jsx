@@ -4,7 +4,12 @@ import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import BackToHome from "./BackToHome";
 import { OrdersSkeleton } from "./Loader";
-import { getOrders, cancelOrder, requestReplacement } from "../utils/order";
+import {
+  getOrders,
+  cancelOrder,
+  requestReplacement,
+  requestReturn,
+} from "../utils/order";
 import { downloadInvoice } from "../utils/invoice";
 import {
   Dialog,
@@ -16,6 +21,7 @@ import {
   ExclamationTriangleIcon,
   ArrowsRightLeftIcon,
   ArrowDownTrayIcon,
+  ArrowUturnLeftIcon,
 } from "@heroicons/react/24/outline";
 
 function classNames(...classes) {
@@ -29,6 +35,14 @@ const STEPS = ["Order placed", "Processing", "Shipped", "Delivered"];
 // bar and show a notice instead.
 const CANCELLED_STATUSES = ["return_in_transit", "cancelled", "refunded"];
 
+// Post-delivery return / refund flow.
+const RETURN_FLOW_STATUSES = [
+  "return_requested",
+  "return_in_transit",
+  "return_received",
+  "returned",
+];
+
 // Replacement (exchange) flow — no money changes hands.
 const REPLACEMENT_ACTIVE_STATUSES = [
   "replacement_requested",
@@ -39,6 +53,51 @@ const REPLACEMENT_ACTIVE_STATUSES = [
 // in a replacement flow).
 const canRequestReplacement = (order) =>
   order.status === "delivered";
+
+// Returns are only possible after delivery. A rejected request puts the order
+// back into delivered, so it can be raised again.
+const canRequestReturn = (order) => order.status === "delivered";
+
+// Estimate the refund for the selected quantities, mirroring the server:
+// a full return includes shipping; a partial return includes the returned
+// line totals plus their proportional share of tax.
+const estimateReturnRefund = (order, selections) => {
+  if (!order) return 0;
+  const selected = new Map();
+  order.items.forEach((item, index) => {
+    const quantity = selections[index] || 0;
+    if (quantity < 1) return;
+    const key = `${item.product}|${item.color}|${item.size}`;
+    const existing = selected.get(key);
+    if (existing) existing.quantity += quantity;
+    else selected.set(key, { ...item, quantity });
+  });
+  if (selected.size === 0) return 0;
+
+  const ordered = new Map();
+  order.items.forEach((item) => {
+    const key = `${item.product}|${item.color}|${item.size}`;
+    ordered.set(key, (ordered.get(key) || 0) + item.quantity);
+  });
+
+  const isFullReturn =
+    selected.size === ordered.size &&
+    [...ordered].every(
+      ([key, quantity]) => selected.get(key)?.quantity === quantity
+    );
+  if (isFullReturn) return order.total;
+
+  const itemsSubtotal = [...selected.values()].reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const taxShare =
+    order.subtotal > 0 ? order.taxes * (itemsSubtotal / order.subtotal) : 0;
+  return Math.min(order.total, itemsSubtotal + taxShare);
+};
+
+const returnAmount = (order) =>
+  formatCurrency(order.return?.refundAmount ?? order.total);
 
 // Map an order status to the progress bar step (0-3)
 const statusStep = (status) => {
@@ -55,7 +114,10 @@ const statusStep = (status) => {
 };
 
 const STATUS_LABELS = {
+  return_requested: "Return requested",
   return_in_transit: "Returning to us",
+  return_received: "Return received",
+  returned: "Return completed",
   replacement_requested: "Replacement requested",
   replacement_out: "Replacement on its way",
   replacement_completed: "Replacement completed",
@@ -88,7 +150,15 @@ const paymentStatusLabel = (order) => {
   const status = order.paymentStatus || "pending";
   if (isCodOrder(order)) {
     if (status === "pending") {
-      if (["cancelled", "return_in_transit"].includes(order.status)) {
+      if (
+        [
+          "cancelled",
+          "return_requested",
+          "return_in_transit",
+          "return_received",
+          "returned",
+        ].includes(order.status)
+      ) {
         return "No payment collected";
       }
       if (order.status === "delivered") return "Cash not collected";
@@ -113,6 +183,13 @@ const Orders = () => {
   const [replaceTarget, setReplaceTarget] = useState(null);
   const [replaceReason, setReplaceReason] = useState("");
   const [replacing, setReplacing] = useState(false);
+
+  // Return dialog state. Selections maps an order item index to the quantity
+  // the customer wants to send back (0 means not selected).
+  const [returnTarget, setReturnTarget] = useState(null);
+  const [returnSelections, setReturnSelections] = useState({});
+  const [returnReason, setReturnReason] = useState("");
+  const [returning, setReturning] = useState(false);
 
   useEffect(() => {
     if (!isSignedIn || !user?.id) {
@@ -148,7 +225,11 @@ const Orders = () => {
       setOrders((prev) =>
         prev.map((o) => (o._id === updated._id ? updated : o)),
       );
-      toast.success("Order cancelled. Your refund is being processed.");
+      toast.success(
+        updated.cancellation?.refundStatus === "not_required"
+          ? "Order cancelled. No payment was collected, so no refund is needed."
+          : "Order cancelled. Your refund is being processed.",
+      );
       setCancelTarget(null);
       setReason("");
     } catch (err) {
@@ -192,6 +273,91 @@ const Orders = () => {
       setReplacing(false);
     }
   };
+
+  const openReturn = (order) => {
+    setReturnTarget(order);
+    const initial = {};
+    order.items.forEach((item, index) => {
+      initial[index] = item.quantity;
+    });
+    setReturnSelections(initial);
+    setReturnReason("");
+  };
+
+  const closeReturn = () => {
+    if (returning) return;
+    setReturnTarget(null);
+    setReturnSelections({});
+    setReturnReason("");
+  };
+
+  const toggleReturnItem = (index, checked, maxQuantity) => {
+    setReturnSelections((prev) => ({
+      ...prev,
+      [index]: checked ? maxQuantity : 0,
+    }));
+  };
+
+  const changeReturnQuantity = (index, quantity) => {
+    setReturnSelections((prev) => ({
+      ...prev,
+      [index]: Number(quantity),
+    }));
+  };
+
+  const confirmReturn = async () => {
+    if (!returnTarget) return;
+    if (!returnReason.trim()) {
+      toast.error("Tell us why you're returning these items.");
+      return;
+    }
+    const items = returnTarget.items
+      .map((item, index) => ({
+        product: item.product,
+        color: item.color,
+        size: item.size,
+        quantity: returnSelections[index] || 0,
+      }))
+      .filter((item) => item.quantity > 0);
+    if (items.length === 0) {
+      toast.error("Select at least one item to return.");
+      return;
+    }
+
+    setReturning(true);
+    try {
+      const updated = await requestReturn(returnTarget._id, user.id, {
+        reason: returnReason,
+        items,
+      });
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o)),
+      );
+      toast.success(
+        "Return requested. We'll review it and arrange pickup once approved.",
+      );
+      setReturnTarget(null);
+      setReturnSelections({});
+      setReturnReason("");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setReturning(false);
+    }
+  };
+
+  const returnItemCount = Object.values(returnSelections).reduce(
+    (sum, quantity) => sum + (quantity > 0 ? quantity : 0),
+    0,
+  );
+  const estimatedRefund = estimateReturnRefund(
+    returnTarget,
+    returnSelections,
+  );
+  const returnPaymentPending =
+    returnTarget &&
+    isCodOrder(returnTarget) &&
+    (returnTarget.paymentStatus || "pending") === "pending";
 
   // Generate and download the order's invoice as a PDF. Purely client-side —
   // the PDF is built from the order data already on screen (no DB writes).
@@ -268,9 +434,21 @@ const Orders = () => {
               const isReplacement = REPLACEMENT_ACTIVE_STATUSES.includes(
                 order.status,
               );
-              // Either a cancellation-family or replacement-family state hides
-              // the linear delivery tracker.
-              const hideTracker = isCancelled || isReplacement;
+              // A return is distinguishable from a shipped-order cancellation
+              // because only returns carry `order.return.requestedAt`.
+              const isReturnFlow =
+                Boolean(order.return?.requestedAt) &&
+                (RETURN_FLOW_STATUSES.includes(order.status) ||
+                  (order.status === "refunded" &&
+                    Boolean(order.return?.refundedAt)));
+              // Any non-linear state hides the delivery tracker.
+              const hideTracker =
+                isCancelled ||
+                isReplacement ||
+                isReturnFlow ||
+                ["return_requested", "return_received", "returned"].includes(
+                  order.status,
+                );
               // Unpaid COD cancellations have no money to return.
               const refundNotRequired =
                 order.cancellation?.refundStatus === "not_required";
@@ -298,8 +476,14 @@ const Orders = () => {
                       <span
                         className={classNames(
                           "rounded-full px-2.5 py-1 text-xs font-medium",
+                          order.status === "return_requested" &&
+                            "bg-amber-50 text-amber-700",
                           order.status === "return_in_transit" &&
                             "bg-blue-50 text-blue-700",
+                          order.status === "return_received" &&
+                            "bg-sky-50 text-sky-700",
+                          order.status === "returned" &&
+                            "bg-emerald-50 text-emerald-700",
                           order.status === "cancelled" &&
                             "bg-red-50 text-red-700",
                           order.status === "refunded" &&
@@ -316,8 +500,58 @@ const Orders = () => {
                     </div>
                   </div>
 
-                  {/* Returning / cancellation / refund / replacement notice */}
-                  {isCancelled && (
+                  {/* Return after delivery — partial or full */}
+                  {isReturnFlow && (
+                    <div
+                      className={classNames(
+                        "border-b border-gray-200 px-4 py-3 text-sm sm:px-6",
+                        order.status === "return_requested" &&
+                          "bg-amber-50 text-amber-800",
+                        order.status === "return_in_transit" &&
+                          "bg-blue-50 text-blue-800",
+                        order.status === "return_received" &&
+                          "bg-sky-50 text-sky-800",
+                        (order.status === "returned" ||
+                          order.status === "refunded") &&
+                          "bg-emerald-50 text-emerald-800",
+                      )}
+                    >
+                      {order.status === "return_requested" &&
+                        "Return requested. We're reviewing it — no refund has been issued yet."}
+                      {order.status === "return_in_transit" &&
+                        (order.return?.refundStatus === "not_required"
+                          ? "Your return was approved. Send the item(s) back to us. No payment was collected, so no refund is due."
+                          : `Your return was approved. Send the item(s) back — we'll refund ${returnAmount(
+                              order,
+                            )} once they reach our warehouse.`)}
+                      {order.status === "return_received" &&
+                        `We've received your return. A refund of ${returnAmount(
+                          order,
+                        )} is being processed.`}
+                      {order.status === "returned" &&
+                        "Return completed. No payment was collected, so no refund was due."}
+                      {order.status === "refunded" &&
+                        `Return completed. A refund of ${returnAmount(
+                          order,
+                        )} has been processed.`}
+                    </div>
+                  )}
+
+                  {/* A declined return returns the order to delivered. */}
+                  {order.status === "delivered" &&
+                    order.return?.rejectedAt &&
+                    !isReturnFlow && (
+                      <div className="border-b border-gray-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:px-6">
+                        Your return request was declined
+                        {order.return.rejectionReason
+                          ? `: ${order.return.rejectionReason}`
+                          : "."}{" "}
+                        You can request a return again.
+                      </div>
+                    )}
+
+                  {/* Cancellation / refund of an order that never arrived */}
+                  {isCancelled && !isReturnFlow && (
                     <div
                       className={classNames(
                         "border-b border-gray-200 px-4 py-3 text-sm sm:px-6",
@@ -471,6 +705,17 @@ const Orders = () => {
                           </button>
                         )}
 
+                        {/* Return — delivered orders only */}
+                        {canRequestReturn(order) && (
+                          <button
+                            type="button"
+                            onClick={() => openReturn(order)}
+                            className="rounded-md border border-amber-300 px-3 py-1.5 text-sm font-medium text-amber-700 hover:bg-amber-50"
+                          >
+                            Request return
+                          </button>
+                        )}
+
                         {/* Replacement — delivered orders only */}
                         {canRequestReplacement(order) && (
                           <button
@@ -563,9 +808,13 @@ const Orders = () => {
                   </DialogTitle>
                   <div className="mt-2">
                     <p className="text-sm text-gray-500">
-                      Are you sure you want to cancel this order? A refund of{" "}
-                      {formatCurrency(cancelTarget?.total)} will be processed to
-                      your original payment method. This can't be undone.
+                      {cancelTarget &&
+                      isCodOrder(cancelTarget) &&
+                      (cancelTarget.paymentStatus || "pending") === "pending"
+                        ? "Are you sure you want to cancel this order? No payment has been collected, so there is no refund — the stock will be returned to the store. This can't be undone."
+                        : `Are you sure you want to cancel this order? A refund of ${formatCurrency(
+                            cancelTarget?.total,
+                          )} will be processed to your original payment method. This can't be undone.`}
                     </p>
                     <label
                       htmlFor="cancel-reason"
@@ -673,6 +922,169 @@ const Orders = () => {
                   type="button"
                   disabled={replacing}
                   onClick={closeReplace}
+                  className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 inset-ring inset-ring-gray-300 hover:bg-gray-50 disabled:opacity-60 sm:mt-0 sm:w-auto"
+                >
+                  Cancel
+                </button>
+              </div>
+            </DialogPanel>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Return request dialog */}
+      <Dialog
+        open={!!returnTarget}
+        onClose={closeReturn}
+        className="relative z-10"
+      >
+        <DialogBackdrop
+          transition
+          className="fixed inset-0 bg-gray-500/75 transition-opacity data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in"
+        />
+        <div className="fixed inset-0 z-10 w-screen overflow-y-auto">
+          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+            <DialogPanel
+              transition
+              className="relative transform overflow-hidden rounded-lg bg-white px-4 pt-5 pb-4 text-left shadow-xl transition-all data-closed:translate-y-4 data-closed:opacity-0 data-enter:duration-300 data-enter:ease-out data-leave:duration-200 data-leave:ease-in sm:my-8 sm:w-full sm:max-w-lg sm:p-6 data-closed:sm:translate-y-0 data-closed:sm:scale-95"
+            >
+              <div className="sm:flex sm:items-start">
+                <div className="mx-auto flex size-12 shrink-0 items-center justify-center rounded-full bg-amber-100 sm:mx-0 sm:size-10">
+                  <ArrowUturnLeftIcon
+                    aria-hidden="true"
+                    className="size-6 text-amber-600"
+                  />
+                </div>
+                <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left">
+                  <DialogTitle
+                    as="h3"
+                    className="text-base font-semibold text-gray-900"
+                  >
+                    Return items from {returnTarget?.orderNumber}
+                  </DialogTitle>
+                  <p className="mt-2 text-sm text-gray-500">
+                    Choose the items and quantities you're sending back. We'll
+                    arrange pickup once your request is approved, and issue the
+                    refund after we receive them.
+                  </p>
+
+                  <div className="mt-4 space-y-2">
+                    {(returnTarget?.items || []).map((item, index) => {
+                      const quantity = returnSelections[index] || 0;
+                      return (
+                        <div
+                          key={`${item.product}-${item.color}-${item.size}-${index}`}
+                          className="rounded-md border border-gray-200 px-3 py-2"
+                        >
+                          <label className="flex items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={quantity > 0}
+                              onChange={(e) =>
+                                toggleReturnItem(
+                                  index,
+                                  e.target.checked,
+                                  item.quantity,
+                                )
+                              }
+                              className="mt-1 size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="flex-1">
+                              <span className="block text-sm font-medium text-gray-900">
+                                {item.title}
+                              </span>
+                              <span className="block text-xs text-gray-500">
+                                {[item.color, item.size]
+                                  .filter(Boolean)
+                                  .join(" · ")}{" "}
+                                · {formatCurrency(item.price)} each
+                              </span>
+                            </span>
+                          </label>
+                          {quantity > 0 && (
+                            <div className="mt-2 flex items-center gap-2 pl-7">
+                              <label
+                                htmlFor={`return-qty-${index}`}
+                                className="text-xs text-gray-500"
+                              >
+                                Quantity
+                              </label>
+                              <select
+                                id={`return-qty-${index}`}
+                                value={quantity}
+                                onChange={(e) =>
+                                  changeReturnQuantity(index, e.target.value)
+                                }
+                                className="rounded-md border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 focus:border-indigo-500 focus:outline-none"
+                              >
+                                {Array.from(
+                                  { length: item.quantity },
+                                  (_, i) => i + 1,
+                                ).map((n) => (
+                                  <option key={n} value={n}>
+                                    {n} of {item.quantity}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <label
+                    htmlFor="return-reason"
+                    className="mt-4 block text-sm font-medium text-gray-700"
+                  >
+                    Reason (required)
+                  </label>
+                  <textarea
+                    id="return-reason"
+                    rows={2}
+                    value={returnReason}
+                    onChange={(e) => setReturnReason(e.target.value)}
+                    placeholder="e.g. wrong size, doesn't fit, damaged"
+                    className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+
+                  <div className="mt-3 rounded-md bg-gray-50 px-3 py-2 text-sm">
+                    {returnPaymentPending ? (
+                      <p className="text-gray-600">
+                        No payment was collected for this order, so no refund
+                        will be issued.
+                      </p>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-gray-600">
+                          Estimated refund
+                          {returnItemCount > 0
+                            ? ` (${returnItemCount} item${
+                                returnItemCount === 1 ? "" : "s"
+                              })`
+                            : ""}
+                        </span>
+                        <span className="font-semibold text-gray-900">
+                          {formatCurrency(estimatedRefund)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  disabled={returning}
+                  onClick={confirmReturn}
+                  className="inline-flex w-full justify-center rounded-md bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-3 sm:w-auto"
+                >
+                  {returning ? "Requesting..." : "Yes, request return"}
+                </button>
+                <button
+                  type="button"
+                  disabled={returning}
+                  onClick={closeReturn}
                   className="mt-3 inline-flex w-full justify-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 inset-ring inset-ring-gray-300 hover:bg-gray-50 disabled:opacity-60 sm:mt-0 sm:w-auto"
                 >
                   Cancel

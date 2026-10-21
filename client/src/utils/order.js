@@ -103,6 +103,21 @@ export const cancelOrder = async (orderId, userId, reason) => {
   return json.data;
 };
 
+// Request a return (partial or full) for a delivered order. The request waits
+// for admin approval; the refund is issued after the items are received.
+export const requestReturn = async (orderId, userId, { reason, items }) => {
+  const res = await apiFetch(
+    `${API_BASE_URL}/api/order/return/request/${orderId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId, reason, items }),
+    }
+  );
+  const json = await readJson(res, "Could not request a return");
+  return json.data;
+};
+
 // Request a replacement (exchange, no money) for a delivered order. The
 // customer gets a new unit; the original is picked up and returned.
 export const requestReplacement = async (orderId, userId, reason) => {

@@ -97,6 +97,58 @@ export const completeReplacementAdmin = async (
   return json.data;
 };
 
+// Admin approves a customer return request, allowing the customer to send the
+// items back.
+export const approveReturnAdmin = async (orderId) => {
+  const res = await fetch(
+    `${API_BASE_URL}/api/order/admin/return/approve/${orderId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+  const json = await res.json();
+  if (!res.ok || json.success === false) {
+    throw new Error(json.message || "Could not approve the return");
+  }
+  return json.data;
+};
+
+// Admin rejects a return request; the order goes back to delivered.
+export const rejectReturnAdmin = async (orderId, reason) => {
+  const res = await fetch(
+    `${API_BASE_URL}/api/order/admin/return/reject/${orderId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason }),
+    }
+  );
+  const json = await res.json();
+  if (!res.ok || json.success === false) {
+    throw new Error(json.message || "Could not reject the return");
+  }
+  return json.data;
+};
+
+// Admin receives the returned parcel. `restock` false is for items that
+// can't be resold (damaged, worn, etc.).
+export const receiveReturnedItemsAdmin = async (orderId, restock = true) => {
+  const res = await fetch(
+    `${API_BASE_URL}/api/order/admin/return/receive/${orderId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ restock }),
+    }
+  );
+  const json = await res.json();
+  if (!res.ok || json.success === false) {
+    throw new Error(json.message || "Could not receive the return");
+  }
+  return json.data;
+};
+
 // Admin records that cash was collected for a Cash on Delivery order.
 export const markOrderPaidAdmin = async (orderId, reference = "") => {
   const res = await fetch(

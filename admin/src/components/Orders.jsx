@@ -3,13 +3,16 @@ import { ChevronDownIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { toast } from "react-toastify";
 import {
+  approveReturnAdmin,
   cancelOrderAdmin,
   completeReplacementAdmin,
   dispatchReplacementAdmin,
   getAllOrders,
   markOrderPaidAdmin,
   receiveReturnAdmin,
+  receiveReturnedItemsAdmin,
   refundOrderAdmin,
+  rejectReturnAdmin,
   updateOrderStatus,
 } from "../utils/order";
 import ConfirmModal from "./ConfirmModal";
@@ -23,7 +26,10 @@ const FILTER_OPTIONS = [
   "processing",
   "shipped",
   "delivered",
+  "return_requested",
   "return_in_transit",
+  "return_received",
+  "returned",
   "cancelled",
   "refunded",
   "replacement_requested",
@@ -37,7 +43,10 @@ const statusStyles = {
   processing: "bg-amber-100 text-amber-700",
   shipped: "bg-blue-100 text-blue-700",
   delivered: "bg-green-100 text-green-700",
+  return_requested: "bg-amber-100 text-amber-700",
   return_in_transit: "bg-sky-100 text-sky-700",
+  return_received: "bg-sky-100 text-sky-700",
+  returned: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-red-100 text-red-700",
   refunded: "bg-emerald-100 text-emerald-700",
   replacement_requested: "bg-violet-100 text-violet-700",
@@ -46,7 +55,10 @@ const statusStyles = {
 };
 
 const STATUS_LABELS = {
+  return_requested: "Return requested",
   return_in_transit: "Return in transit",
+  return_received: "Return received",
+  returned: "Return completed",
   replacement_requested: "Replacement requested",
   replacement_out: "Replacement dispatched",
   replacement_completed: "Replacement completed",
@@ -65,17 +77,31 @@ const isTerminal = (status) =>
 // The status dropdown must never be shown for a non-linear state.
 const isReplacement = (status) =>
   typeof status === "string" && status.startsWith("replacement");
+const isReturnStatus = (status) =>
+  typeof status === "string" &&
+  (status.startsWith("return_") || status === "returned");
+
 const isLockedStatus = (status) =>
-  isTerminal(status) || status === "return_in_transit" || isReplacement(status);
+  isTerminal(status) || isReturnStatus(status) || isReplacement(status);
 
 const canCancel = (status) =>
-  !isTerminal(status) && status !== "return_in_transit" && !isReplacement(status);
+  !isTerminal(status) && !isReturnStatus(status) && !isReplacement(status);
 // A return-in-transit order needs to be received before it can be refunded.
-const canReceiveReturn = (status) => status === "return_in_transit";
+const canReceiveCancelledReturn = (order) =>
+  order.status === "return_in_transit" && !order.return?.requestedAt;
+const canReceiveReturnedItems = (order) =>
+  order.status === "return_in_transit" && Boolean(order.return?.requestedAt);
+const canApproveReturn = (order) =>
+  order.status === "return_requested" && Boolean(order.return?.requestedAt);
+const isReturnRefund = (order) =>
+  order.status === "return_received" && Boolean(order.return?.requestedAt);
 const canRefund = (order) =>
-  order.status === "cancelled" &&
-  order.cancellation?.refundStatus !== "completed" &&
-  order.cancellation?.refundStatus !== "not_required";
+  (order.status === "cancelled" &&
+    order.cancellation?.refundStatus !== "completed" &&
+    order.cancellation?.refundStatus !== "not_required") ||
+  (isReturnRefund(order) &&
+    order.return?.refundStatus !== "completed" &&
+    order.return?.refundStatus !== "not_required");
 // Replacement actions.
 const canDispatchReplacement = (status) => status === "replacement_requested";
 const canCompleteReplacement = (status) => status === "replacement_out";
@@ -95,7 +121,15 @@ const paymentStatusLabel = (order) => {
   const status = order.paymentStatus || "pending";
   if (isCodOrder(order)) {
     if (status === "pending") {
-      if (["cancelled", "return_in_transit"].includes(order.status)) {
+      if (
+        [
+          "cancelled",
+          "return_requested",
+          "return_in_transit",
+          "return_received",
+          "returned",
+        ].includes(order.status)
+      ) {
         return "No payment collected";
       }
       if (order.status === "delivered") return "Cash not collected";
@@ -109,7 +143,16 @@ const paymentStatusLabel = (order) => {
 const canMarkPaid = (order) =>
   isCodOrder(order) &&
   (order.paymentStatus || "pending") === "pending" &&
-  !["cancelled", "refunded", "return_in_transit"].includes(order.status);
+  ![
+    "cancelled",
+    "refunded",
+    "return_in_transit",
+    "return_received",
+    "returned",
+  ].includes(order.status);
+
+const returnAmount = (order) =>
+  formatCurrency(order.return?.refundAmount ?? order.total);
 
 const formatDate = (value) =>
   new Date(value).toLocaleDateString(undefined, {
@@ -240,7 +283,82 @@ const Orders = () => {
   const [deliveryTarget, setDeliveryTarget] = useState(null);
   const [collectCash, setCollectCash] = useState(true);
   const [paymentReference, setPaymentReference] = useState("");
+  const [approveReturnTarget, setApproveReturnTarget] = useState(null);
+  const [rejectReturnTarget, setRejectReturnTarget] = useState(null);
+  const [returnRejectReason, setReturnRejectReason] = useState("");
+  const [receiveReturnedTarget, setReceiveReturnedTarget] = useState(null);
+  const [restockReturnedItems, setRestockReturnedItems] = useState(true);
   const [actionBusy, setActionBusy] = useState(false);
+
+  const confirmApproveReturn = async () => {
+    if (!approveReturnTarget) return;
+    setActionBusy(true);
+    try {
+      const updated = await approveReturnAdmin(approveReturnTarget._id);
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o))
+      );
+      toast.success(`Return approved for ${updated.orderNumber}`);
+      setApproveReturnTarget(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const confirmRejectReturn = async () => {
+    if (!rejectReturnTarget) return;
+    if (!returnRejectReason.trim()) {
+      toast.error("Give a reason so the customer knows why.");
+      return;
+    }
+    setActionBusy(true);
+    try {
+      const updated = await rejectReturnAdmin(
+        rejectReturnTarget._id,
+        returnRejectReason.trim()
+      );
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o))
+      );
+      toast.success(
+        `Return rejected for ${updated.orderNumber} — the order stays delivered`
+      );
+      setRejectReturnTarget(null);
+      setReturnRejectReason("");
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const confirmReceiveReturnedItems = async () => {
+    if (!receiveReturnedTarget) return;
+    setActionBusy(true);
+    try {
+      const updated = await receiveReturnedItemsAdmin(
+        receiveReturnedTarget._id,
+        restockReturnedItems
+      );
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o))
+      );
+      toast.success(
+        updated.status === "returned"
+          ? `Return received for ${updated.orderNumber} — no refund due`
+          : restockReturnedItems
+            ? `Return received for ${updated.orderNumber} — stock restored`
+            : `Return received for ${updated.orderNumber} — not restocked`
+      );
+      setReceiveReturnedTarget(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
 
   const confirmDelivery = async () => {
     if (!deliveryTarget) return;
@@ -640,8 +758,15 @@ const Orders = () => {
                               }`}
                             >
                               {statusLabel(order.status)}
+                              {order.status === "return_requested" &&
+                                " — needs approval"}
                               {order.status === "return_in_transit" &&
-                                " — awaiting return"}
+                                (order.return?.requestedAt
+                                  ? " — awaiting returned items"
+                                  : " — awaiting return")}
+                              {order.status === "return_received" &&
+                                " — refund pending"}
+                              {order.status === "returned" && " — no refund due"}
                               {order.status === "cancelled" &&
                                 (order.cancellation?.refundStatus ===
                                 "not_required"
@@ -723,6 +848,78 @@ const Orders = () => {
                             </div>
                           )}
 
+                          {/* Return details (partial or full) */}
+                          {order.return?.requestedAt && (
+                            <div className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                              <p>
+                                Return requested on{" "}
+                                {formatDate(order.return.requestedAt)}
+                              </p>
+                              {order.return.reason && (
+                                <p className="mt-1">
+                                  Reason: {order.return.reason}
+                                </p>
+                              )}
+                              {order.return.items?.length > 0 && (
+                                <p className="mt-1">
+                                  Items:{" "}
+                                  {order.return.items
+                                    .map(
+                                      (item) =>
+                                        `${item.title} (${item.color} / ${item.size}) ×${item.quantity}`
+                                    )
+                                    .join(", ")}
+                                </p>
+                              )}
+                              <p className="mt-1">
+                                Refund:{" "}
+                                <span className="font-medium capitalize">
+                                  {(
+                                    order.return.refundStatus || "not_required"
+                                  ).replace("_", " ")}
+                                </span>
+                                {order.return.refundAmount
+                                  ? ` · ${formatCurrency(
+                                      order.return.refundAmount
+                                    )}`
+                                  : ""}
+                              </p>
+                              {order.return.approvedAt && (
+                                <p className="mt-1">
+                                  Approved:{" "}
+                                  {formatDate(order.return.approvedAt)}
+                                </p>
+                              )}
+                              {order.return.rejectedAt && (
+                                <p className="mt-1">
+                                  Rejected:{" "}
+                                  {formatDate(order.return.rejectedAt)}
+                                  {order.return.rejectionReason
+                                    ? ` · ${order.return.rejectionReason}`
+                                    : ""}
+                                </p>
+                              )}
+                              {order.return.receivedAt && (
+                                <p className="mt-1">
+                                  Received:{" "}
+                                  {formatDate(order.return.receivedAt)} · stock{" "}
+                                  {order.return.stockRestored
+                                    ? "restored"
+                                    : "not restocked"}
+                                </p>
+                              )}
+                              {order.return.refundedAt && (
+                                <p className="mt-1">
+                                  Refunded:{" "}
+                                  {formatDate(order.return.refundedAt)}
+                                  {order.return.refundReference
+                                    ? ` · ${order.return.refundReference}`
+                                    : ""}
+                                </p>
+                              )}
+                            </div>
+                          )}
+
                           {/* Replacement details (no money involved) */}
                           {order.replacement?.requestedAt && (
                             <div className="mt-3 rounded-md bg-violet-50 px-3 py-2 text-xs text-violet-800">
@@ -774,7 +971,40 @@ const Orders = () => {
                                 Cancel order
                               </button>
                             )}
-                            {canReceiveReturn(order.status) && (
+                            {canApproveReturn(order) && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setApproveReturnTarget(order)}
+                                  className="rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700"
+                                >
+                                  Approve return
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRejectReturnTarget(order);
+                                    setReturnRejectReason("");
+                                  }}
+                                  className="rounded-md border border-red-300 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+                                >
+                                  Reject return
+                                </button>
+                              </>
+                            )}
+                            {canReceiveReturnedItems(order) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setReceiveReturnedTarget(order);
+                                  setRestockReturnedItems(true);
+                                }}
+                                className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
+                              >
+                                Receive returned items
+                              </button>
+                            )}
+                            {canReceiveCancelledReturn(order) && (
                               <button
                                 type="button"
                                 onClick={() => setReturnTarget(order)}
@@ -1022,9 +1252,100 @@ const Orders = () => {
       />
 
       <ConfirmModal
+        open={!!approveReturnTarget}
+        title="Approve return"
+        message={`Approve the return for order ${approveReturnTarget?.orderNumber}? The customer can send the selected items back. ${
+          approveReturnTarget &&
+          (approveReturnTarget.paymentStatus || "pending") === "paid"
+            ? `A refund of ${returnAmount(
+                approveReturnTarget
+              )} will be processed after the items are received.`
+            : "No payment was collected, so no refund will be due."
+        }`}
+        confirmLabel="Yes, approve return"
+        tone="green"
+        hideIcon
+        onConfirm={() => !actionBusy && confirmApproveReturn()}
+        onCancel={() => !actionBusy && setApproveReturnTarget(null)}
+      />
+
+      <ConfirmModal
+        open={!!rejectReturnTarget}
+        title="Reject return"
+        message={`Reject the return request for order ${rejectReturnTarget?.orderNumber}? The order will stay delivered and the customer can request again.`}
+        confirmLabel="Yes, reject return"
+        hideIcon
+        onConfirm={() => !actionBusy && confirmRejectReturn()}
+        onCancel={() => {
+          if (actionBusy) return;
+          setRejectReturnTarget(null);
+          setReturnRejectReason("");
+        }}
+      >
+        <label className="mt-4 block">
+          <span className="text-sm font-medium text-gray-700">
+            Reason for rejection (required)
+          </span>
+          <textarea
+            rows={2}
+            value={returnRejectReason}
+            onChange={(e) => setReturnRejectReason(e.target.value)}
+            placeholder="Tell the customer why the return can't be accepted"
+            className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:border-blue-500 focus:outline-none"
+          />
+        </label>
+      </ConfirmModal>
+
+      <ConfirmModal
+        open={!!receiveReturnedTarget}
+        title="Receive returned items"
+        message={`Confirm the returned items for order ${
+          receiveReturnedTarget?.orderNumber
+        } have reached the store. ${
+          receiveReturnedTarget &&
+          (receiveReturnedTarget.paymentStatus || "pending") === "paid"
+            ? `A refund of ${returnAmount(
+                receiveReturnedTarget
+              )} can then be processed.`
+            : "No payment was collected, so the return will close without a refund."
+        }`}
+        confirmLabel="Yes, receive items"
+        tone="green"
+        hideIcon
+        onConfirm={() => !actionBusy && confirmReceiveReturnedItems()}
+        onCancel={() => !actionBusy && setReceiveReturnedTarget(null)}
+      >
+        <div className="mt-4">
+          <label className="flex items-start gap-3 rounded-md border border-gray-200 p-3">
+            <input
+              type="checkbox"
+              checked={restockReturnedItems}
+              onChange={(e) => setRestockReturnedItems(e.target.checked)}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-sm font-medium text-gray-900">
+                Restock these items
+              </span>
+              <span className="block text-xs text-gray-600">
+                Uncheck if they arrived damaged or can't be resold.
+              </span>
+            </span>
+          </label>
+          <p className="mt-2 text-xs text-gray-500">
+            Only the returned quantities are added back to inventory.
+          </p>
+        </div>
+      </ConfirmModal>
+
+      <ConfirmModal
         open={!!refundTarget}
         title="Process refund"
-        message={`Process a refund of ${formatCurrency(refundTarget?.total)} for order ${refundTarget?.orderNumber}? This marks the refund as completed.`}
+        message={`Process a refund of ${
+          refundTarget && isReturnRefund(refundTarget)
+            ? returnAmount(refundTarget)
+            : formatCurrency(refundTarget?.total)
+        } for order ${refundTarget?.orderNumber}? This marks the refund as completed.`}
         confirmLabel="Yes, process refund"
         tone="green"
         onConfirm={confirmRefund}
