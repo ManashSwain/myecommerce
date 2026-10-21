@@ -7,6 +7,7 @@ import {
   completeReplacementAdmin,
   dispatchReplacementAdmin,
   getAllOrders,
+  markOrderPaidAdmin,
   receiveReturnAdmin,
   refundOrderAdmin,
   updateOrderStatus,
@@ -73,10 +74,40 @@ const canCancel = (status) =>
 const canReceiveReturn = (status) => status === "return_in_transit";
 const canRefund = (order) =>
   order.status === "cancelled" &&
-  order.cancellation?.refundStatus !== "completed";
+  order.cancellation?.refundStatus !== "completed" &&
+  order.cancellation?.refundStatus !== "not_required";
 // Replacement actions.
 const canDispatchReplacement = (status) => status === "replacement_requested";
 const canCompleteReplacement = (status) => status === "replacement_out";
+
+// Cash on Delivery helpers.
+const isCodOrder = (order) =>
+  order.paymentMethod === "cod" || order.payment?.provider === "cod";
+const paymentMethodLabel = (order) =>
+  isCodOrder(order) ? "Cash on Delivery" : "Card (Stripe)";
+const PAYMENT_STATUS_LABELS = {
+  pending: "Payment pending",
+  paid: "Paid",
+  refund_pending: "Refund pending",
+  refunded: "Refunded",
+};
+const paymentStatusLabel = (order) => {
+  const status = order.paymentStatus || "pending";
+  if (isCodOrder(order)) {
+    if (status === "pending") {
+      return ["cancelled", "return_in_transit"].includes(order.status)
+        ? "No payment collected"
+        : "Cash due";
+    }
+    if (status === "paid") return "Cash collected";
+  }
+  return PAYMENT_STATUS_LABELS[status] || status;
+};
+// A COD order can be marked paid until it is cancelled/returned or already paid.
+const canMarkPaid = (order) =>
+  isCodOrder(order) &&
+  (order.paymentStatus || "pending") === "pending" &&
+  !["cancelled", "refunded", "return_in_transit"].includes(order.status);
 
 const formatDate = (value) =>
   new Date(value).toLocaleDateString(undefined, {
@@ -117,6 +148,8 @@ const Orders = () => {
   };
 
   useEffect(() => {
+    // Initial fetch on mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadOrders();
   }, []);
 
@@ -182,6 +215,7 @@ const Orders = () => {
   const [cancelTarget, setCancelTarget] = useState(null);
   const [returnTarget, setReturnTarget] = useState(null);
   const [refundTarget, setRefundTarget] = useState(null);
+  const [paidTarget, setPaidTarget] = useState(null);
   const [dispatchTarget, setDispatchTarget] = useState(null);
   const [completeTarget, setCompleteTarget] = useState(null);
   const [actionBusy, setActionBusy] = useState(false);
@@ -268,6 +302,23 @@ const Orders = () => {
       );
       toast.success(`Refund processed for ${updated.orderNumber}`);
       setRefundTarget(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setActionBusy(false);
+    }
+  };
+
+  const confirmMarkPaid = async () => {
+    if (!paidTarget) return;
+    setActionBusy(true);
+    try {
+      const updated = await markOrderPaidAdmin(paidTarget._id);
+      setOrders((prev) =>
+        prev.map((o) => (o._id === updated._id ? updated : o))
+      );
+      toast.success(`Cash collection recorded for ${updated.orderNumber}`);
+      setPaidTarget(null);
     } catch (err) {
       toast.error(err.message);
     } finally {
@@ -385,8 +436,13 @@ const Orders = () => {
                   <div className="flex min-w-0 flex-1 items-center gap-4">
                     <UserCircleIcon className="size-8 shrink-0 text-gray-400" />
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-gray-900">
-                        {order.orderNumber}
+                      <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                        <span className="truncate">{order.orderNumber}</span>
+                        {isCodOrder(order) && (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-700 uppercase">
+                            COD
+                          </span>
+                        )}
                       </p>
                       <p className="truncate text-xs text-gray-500">
                         {order.shippingAddress?.fullName} ·{" "}
@@ -507,6 +563,21 @@ const Orders = () => {
                           <p className="mt-2 text-xs text-gray-500">
                             {order.deliveryMethod} delivery ·{" "}
                             {order.contactEmail}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {paymentMethodLabel(order)} ·{" "}
+                            <span
+                              className={`font-medium ${
+                                (order.paymentStatus || "pending") === "paid"
+                                  ? "text-emerald-700"
+                                  : (order.paymentStatus || "pending") ===
+                                      "pending"
+                                    ? "text-amber-700"
+                                    : "text-gray-700"
+                              }`}
+                            >
+                              {paymentStatusLabel(order)}
+                            </span>
                           </p>
                         </div>
 
@@ -670,6 +741,15 @@ const Orders = () => {
                                 Process refund
                               </button>
                             )}
+                            {canMarkPaid(order) && (
+                              <button
+                                type="button"
+                                onClick={() => setPaidTarget(order)}
+                                className="rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700"
+                              >
+                                Mark cash collected
+                              </button>
+                            )}
                             {canDispatchReplacement(order.status) && (
                               <button
                                 type="button"
@@ -785,7 +865,13 @@ const Orders = () => {
       <ConfirmModal
         open={!!cancelTarget}
         title="Cancel order"
-        message={`Are you sure you want to cancel order ${cancelTarget?.orderNumber}? Any ordered stock will be returned to inventory and a refund will need to be processed.`}
+        message={`Are you sure you want to cancel order ${cancelTarget?.orderNumber}? Any ordered stock will be returned to inventory. ${
+          cancelTarget &&
+          isCodOrder(cancelTarget) &&
+          (cancelTarget.paymentStatus || "pending") === "pending"
+            ? "No payment was collected, so no refund is needed."
+            : "A refund will need to be processed."
+        }`}
         confirmLabel="Yes, cancel order"
         onConfirm={confirmCancel}
         onCancel={() => !actionBusy && setCancelTarget(null)}
@@ -809,6 +895,16 @@ const Orders = () => {
         tone="green"
         onConfirm={confirmRefund}
         onCancel={() => !actionBusy && setRefundTarget(null)}
+      />
+
+      <ConfirmModal
+        open={!!paidTarget}
+        title="Mark cash collected"
+        message={`Confirm cash payment of ${formatCurrency(paidTarget?.total)} has been collected for order ${paidTarget?.orderNumber}. This marks the order as paid.`}
+        confirmLabel="Yes, mark as paid"
+        tone="green"
+        onConfirm={confirmMarkPaid}
+        onCancel={() => !actionBusy && setPaidTarget(null)}
       />
 
       <ConfirmModal

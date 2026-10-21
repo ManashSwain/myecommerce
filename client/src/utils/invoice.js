@@ -56,12 +56,29 @@ const PAYMENT_LABELS = {
 const paymentLabel = (paymentStatus) =>
   PAYMENT_LABELS[paymentStatus] || (paymentStatus || "—");
 
+const isCodOrder = (order) =>
+  order.paymentMethod === "cod" || order.payment?.provider === "cod";
+
 // Which payment method string to show. We prefer the gateway reference but
 // fall back to a generic label when there's nothing stored.
 const paymentMethodLine = (order) => {
+  if (isCodOrder(order)) return "Cash on Delivery";
   const provider = order.payment?.provider;
   if (provider === "stripe") return "Card (Stripe)";
   return "Card";
+};
+
+// COD orders start unpaid; make that explicit on the invoice.
+const paymentStatusLine = (order) => {
+  if (isCodOrder(order)) {
+    if (order.paymentStatus === "pending") {
+      return ["cancelled", "return_in_transit"].includes(order.status)
+        ? "Not collected"
+        : "Due on delivery";
+    }
+    if (order.paymentStatus === "paid") return "Paid on delivery";
+  }
+  return paymentLabel(order.paymentStatus);
 };
 
 // Draws a small label/value pair at a given x,y and returns the new y.
@@ -135,7 +152,7 @@ export const downloadInvoice = (order) => {
   drawMeta("Order no.", order.orderNumber || "—", 1);
   drawMeta("Order date", formatDate(order.createdAt), 2);
   drawMeta("Order status", statusLabel(order.status), 3);
-  drawMeta("Payment status", paymentLabel(order.paymentStatus), 4);
+  drawMeta("Payment status", paymentStatusLine(order), 4);
   drawMeta("Payment method", paymentMethodLine(order), 5);
 
   y = Math.max(leftBottom + 14, y + 6 * 6) + 6;

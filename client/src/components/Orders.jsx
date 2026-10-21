@@ -72,6 +72,31 @@ const canCancel = (status) => status === "placed" || status === "processing";
 const formatCurrency = (amount) =>
   `₹${Number(amount || 0).toLocaleString("en-IN")}`;
 
+// Payment method / status helpers. Orders created before COD existed have no
+// paymentMethod and are treated as card orders.
+const isCodOrder = (order) =>
+  order.paymentMethod === "cod" || order.payment?.provider === "cod";
+const paymentMethodLabel = (order) =>
+  isCodOrder(order) ? "Cash on Delivery" : "Card (Stripe)";
+const PAYMENT_STATUS_LABELS = {
+  pending: "Payment pending",
+  paid: "Paid",
+  refund_pending: "Refund pending",
+  refunded: "Refunded",
+};
+const paymentStatusLabel = (order) => {
+  const status = order.paymentStatus || "pending";
+  if (isCodOrder(order)) {
+    if (status === "pending") {
+      return ["cancelled", "return_in_transit"].includes(order.status)
+        ? "No payment collected"
+        : "Pay on delivery";
+    }
+    if (status === "paid") return "Cash collected";
+  }
+  return PAYMENT_STATUS_LABELS[status] || status;
+};
+
 const Orders = () => {
   const { isSignedIn, isLoaded, user } = useAuth();
   const [orders, setOrders] = useState([]);
@@ -244,6 +269,9 @@ const Orders = () => {
               // Either a cancellation-family or replacement-family state hides
               // the linear delivery tracker.
               const hideTracker = isCancelled || isReplacement;
+              // Unpaid COD cancellations have no money to return.
+              const refundNotRequired =
+                order.cancellation?.refundStatus === "not_required";
               return (
                 <div
                   key={order._id}
@@ -297,16 +325,23 @@ const Orders = () => {
                       )}
                     >
                       {order.status === "return_in_transit"
-                        ? `This order was cancelled after it shipped. The parcel is on its way back to us — we'll refund ${formatCurrency(
-                            order.cancellation?.refundAmount ?? order.total,
-                          )} once it reaches our warehouse.`
+                        ? `This order was cancelled after it shipped. The parcel is on its way back to us.${
+                            refundNotRequired
+                              ? " No payment was collected, so no refund is needed."
+                              : ` We'll refund ${formatCurrency(
+                                  order.cancellation?.refundAmount ??
+                                    order.total,
+                                )} once it reaches our warehouse.`
+                          }`
                         : order.status === "refunded"
                           ? `This order was cancelled and a refund of ${formatCurrency(
                               order.cancellation?.refundAmount ?? order.total,
                             )} has been processed.`
-                          : `This order was cancelled. A refund of ${formatCurrency(
-                              order.cancellation?.refundAmount ?? order.total,
-                            )} is being processed.`}
+                          : refundNotRequired
+                            ? "This order was cancelled. No payment was collected, so no refund is needed."
+                            : `This order was cancelled. A refund of ${formatCurrency(
+                                order.cancellation?.refundAmount ?? order.total,
+                              )} is being processed.`}
                     </div>
                   )}
 
@@ -392,6 +427,10 @@ const Orders = () => {
                             <p>{order.contactEmail}</p>
                             <p>{order.shippingAddress.phone}</p>
                             <p>{order.deliveryMethod} delivery</p>
+                            <p>
+                              {paymentMethodLabel(order)} ·{" "}
+                              {paymentStatusLabel(order)}
+                            </p>
                           </dd>
                         </div>
                       </dl>

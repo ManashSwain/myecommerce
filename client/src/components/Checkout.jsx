@@ -5,12 +5,22 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { CheckCircleIcon, TrashIcon } from "@heroicons/react/20/solid";
-import { MapPinIcon, PlusIcon } from "@heroicons/react/24/outline";
+import {
+  BanknotesIcon,
+  CreditCardIcon,
+  MapPinIcon,
+  PlusIcon,
+} from "@heroicons/react/24/outline";
 import { toast } from "react-toastify";
 import useAuth from "../customhooks/useAuth";
 import { API_BASE_URL } from "../constants";
 import { getCart, removeCartItem, updateCartQuantity } from "../utils/cart";
-import { createCheckoutSession, confirmCheckout } from "../utils/order";
+import {
+  createCheckoutSession,
+  createDirectOrder,
+  createOrder,
+  confirmCheckout,
+} from "../utils/order";
 
 
 
@@ -42,6 +52,21 @@ const deliveryMethods = [
   { id: 2, title: "Express", turnaround: "2–5 business days", price: 16 },
 ];
 
+const paymentMethods = [
+  {
+    id: "stripe",
+    title: "Pay online",
+    description: "Secure card payment via Stripe",
+    icon: CreditCardIcon,
+  },
+  {
+    id: "cod",
+    title: "Cash on Delivery",
+    description: "Pay in cash when your order arrives",
+    icon: BanknotesIcon,
+  },
+];
+
 const TAX_RATE = 0.0863;
 
 // Map an address type to a friendly chip label
@@ -70,6 +95,7 @@ const Checkout = () => {
   const [deliveryMethodId, setDeliveryMethodId] = useState(
     deliveryMethods[0].id,
   );
+  const [paymentMethod, setPaymentMethod] = useState("stripe");
 
   // Shipping / contact form — controlled so address chips can populate it.
   const [form, setForm] = useState({
@@ -258,7 +284,13 @@ const Checkout = () => {
   const taxes = subtotal * TAX_RATE;
   const total = subtotal + shipping + taxes;
 
-  const money = (value) => `$${value.toFixed(2)}`;
+  // The store charges in rupees (Stripe is configured with "inr"), so keep
+  // the checkout totals consistent with the rest of the storefront.
+  const money = (value) =>
+    `₹${Number(value || 0).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
 
@@ -266,6 +298,12 @@ const Checkout = () => {
     e.preventDefault();
     if (!isEmailValid) {
       toast.error("Please enter a valid email address to place your order.");
+      return;
+    }
+    if (!form.phone.trim()) {
+      toast.error(
+        "Please enter a phone number — the courier needs it to deliver your order.",
+      );
       return;
     }
     if (buyNow) {
@@ -295,18 +333,16 @@ const Checkout = () => {
         "home",
     };
 
-    setPlacingOrder(true);
-    try {
-      // Start a Stripe Checkout Session for this order, then hand the shopper
-      // off to Stripe's hosted payment page. The order itself is created by
-      // the backend once payment succeeds (on the ?success return trip).
-      const payload = buyNow
+    // Shared payload for both payment paths. Buy-now sends explicit items;
+    // cart checkout lets the backend read the user's cart.
+    const payload = {
+      userId: user.id,
+      contactEmail: form.email,
+      shippingAddress,
+      deliveryMethod: selectedDelivery.title,
+      shipping,
+      ...(buyNow
         ? {
-            userId: user.id,
-            contactEmail: form.email,
-            shippingAddress,
-            deliveryMethod: selectedDelivery.title,
-            shipping,
             items: [
               {
                 productId: buyNow.productId,
@@ -316,14 +352,29 @@ const Checkout = () => {
               },
             ],
           }
-        : {
-            userId: user.id,
-            contactEmail: form.email,
-            shippingAddress,
-            deliveryMethod: selectedDelivery.title,
-            shipping,
-          };
+        : {}),
+    };
 
+    setPlacingOrder(true);
+    try {
+      if (paymentMethod === "cod") {
+        // Cash on Delivery: place the order immediately. The backend reserves
+        // stock, leaves payment pending, and records that cash is due.
+        const order = buyNow
+          ? await createDirectOrder({ ...payload, paymentMethod: "cod" })
+          : await createOrder({ ...payload, paymentMethod: "cod" });
+        toast.success(
+          `Order ${order.orderNumber} placed — pay ${money(
+            order.total,
+          )} in cash on delivery.`,
+        );
+        navigate("/orders", { replace: true });
+        return;
+      }
+
+      // Start a Stripe Checkout Session for this order, then hand the shopper
+      // off to Stripe's hosted payment page. The order itself is created by
+      // the backend once payment succeeds (on the ?success return trip).
       const { url } = await createCheckoutSession(payload);
       if (!url) {
         throw new Error("Could not start checkout. Please try again.");
@@ -722,13 +773,14 @@ const Checkout = () => {
                     htmlFor="phone"
                     className="block text-sm/6 font-medium text-gray-700"
                   >
-                    Phone
+                    Phone <span className="text-red-500">*</span>
                   </label>
                   <div className="mt-2">
                     <input
                       id="phone"
                       name="phone"
                       type="text"
+                      required
                       value={form.phone}
                       onChange={(e) => {
                         handleChange(e);
@@ -754,7 +806,7 @@ const Checkout = () => {
                       key={deliveryMethod.id}
                       aria-label={deliveryMethod.title}
 
-                      aria-description={`${deliveryMethod.turnaround} for $${deliveryMethod.price}`}
+                      aria-description={`${deliveryMethod.turnaround} for ${money(deliveryMethod.price)}`}
                       className="group relative flex rounded-lg border border-gray-300 bg-white p-4 has-checked:outline-2 has-checked:-outline-offset-2 has-checked:outline-indigo-600 has-focus-visible:outline-3 has-focus-visible:-outline-offset-1 has-disabled:border-gray-400 has-disabled:bg-gray-200 has-disabled:opacity-25"
                     >
                       <input
@@ -778,7 +830,7 @@ const Checkout = () => {
                           {deliveryMethod.turnaround}
                         </span>
                         <span className="mt-6 block text-sm font-medium text-gray-900">
-                          ${deliveryMethod.price.toFixed(2)}
+                          {money(deliveryMethod.price)}
                         </span>
                       </div>
                       <CheckCircleIcon
@@ -788,6 +840,56 @@ const Checkout = () => {
                     </label>
                   ))}
                 </div>
+              </fieldset>
+            </div>
+
+            <div className="mt-10 border-t border-gray-200 pt-10">
+              <fieldset>
+                <legend className="text-lg font-medium text-gray-900">
+                  Payment method
+                </legend>
+                <div className="mt-4 grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-4">
+                  {paymentMethods.map((method) => {
+                    const Icon = method.icon;
+                    return (
+                      <label
+                        key={method.id}
+                        className="group relative flex rounded-lg border border-gray-300 bg-white p-4 has-checked:outline-2 has-checked:-outline-offset-2 has-checked:outline-indigo-600 has-focus-visible:outline-3 has-focus-visible:-outline-offset-1"
+                      >
+                        <input
+                          value={method.id}
+                          checked={paymentMethod === method.id}
+                          onChange={() => setPaymentMethod(method.id)}
+                          name="payment-method"
+                          type="radio"
+                          className="absolute inset-0 appearance-none focus:outline-none"
+                        />
+                        <div className="flex-1">
+                          <span className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                            <Icon
+                              aria-hidden="true"
+                              className="size-5 text-gray-500"
+                            />
+                            {method.title}
+                          </span>
+                          <span className="mt-1 block text-sm text-gray-500">
+                            {method.description}
+                          </span>
+                        </div>
+                        <CheckCircleIcon
+                          aria-hidden="true"
+                          className="invisible size-5 text-indigo-600 group-has-checked:visible"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+                {paymentMethod === "cod" && (
+                  <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                    Please keep {money(total)} ready in cash when your order
+                    arrives. We'll call your phone number before delivery.
+                  </p>
+                )}
               </fieldset>
             </div>
           </div>
@@ -1004,11 +1106,22 @@ const Checkout = () => {
                   className="w-full rounded-md border border-transparent bg-indigo-600 px-4 py-3 text-base font-medium text-white shadow-xs hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-50 focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-50"
                 >
 
-                  {placingOrder ? "Placing order..." : "Confirm order"}
+                  {placingOrder
+                    ? "Placing order..."
+                    : paymentMethod === "cod"
+                      ? "Place order — pay on delivery"
+                      : "Continue to payment"}
                 </button>
                 {!isEmailValid && (
                   <p className="mt-2 text-center text-xs text-gray-500">
                     Enter a valid email to place your order.
+                  </p>
+                )}
+                {isEmailValid && !placingOrder && (
+                  <p className="mt-2 text-center text-xs text-gray-500">
+                    {paymentMethod === "cod"
+                      ? `No payment is taken now — pay ${money(total)} in cash when your order arrives.`
+                      : "You'll be redirected to Stripe to complete payment securely."}
                   </p>
                 )}
               </div>

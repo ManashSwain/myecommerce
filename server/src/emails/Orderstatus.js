@@ -200,17 +200,19 @@ const Orderstatus = ({ order = {} }) => {
                 { style: refundNote },
                 REPLACEMENT_NOTES[status]
                   ? REPLACEMENT_NOTES[status]
-                  : status === "refunded"
-                    ? `A refund of ${formatCurrency(
-                        order.cancellation?.refundAmount || total
-                      )} has been processed to your original payment method.`
-                    : status === "return_in_transit"
-                      ? `Your parcel is on its way back to us. Once it reaches our warehouse we'll restore it to stock and issue your refund of ${formatCurrency(
+                  : order.cancellation?.refundStatus === "not_required"
+                    ? "No payment was collected for this order, so no refund is needed."
+                    : status === "refunded"
+                      ? `A refund of ${formatCurrency(
                           order.cancellation?.refundAmount || total
-                        )}.`
-                      : `A refund of ${formatCurrency(
-                          order.cancellation?.refundAmount || total
-                        )} is being processed and will reach your account shortly.`
+                        )} has been processed to your original payment method.`
+                      : status === "return_in_transit"
+                        ? `Your parcel is on its way back to us. Once it reaches our warehouse we'll restore it to stock and issue your refund of ${formatCurrency(
+                            order.cancellation?.refundAmount || total
+                          )}.`
+                        : `A refund of ${formatCurrency(
+                            order.cancellation?.refundAmount || total
+                          )} is being processed and will reach your account shortly.`
               )
             )
           : // Progress tracker (only for active orders)
@@ -363,7 +365,19 @@ const Orderstatus = ({ order = {} }) => {
               h(Text, { style: h2 }, "Contact & shipping"),
               h(Text, { style: addressLine }, contactEmail),
               h(Text, { style: addressLine }, shippingAddress.phone),
-              h(Text, { style: addressLine }, `${deliveryMethod} delivery`)
+              h(Text, { style: addressLine }, `${deliveryMethod} delivery`),
+              h(
+                Text,
+                { style: addressLine },
+                order.paymentMethod === "cod" ||
+                  order.payment?.provider === "cod"
+                  ? order.paymentStatus === "paid"
+                    ? "Cash on Delivery · paid"
+                    : ["cancelled", "return_in_transit"].includes(status)
+                      ? "Cash on Delivery · not collected"
+                      : "Cash on Delivery · pay on delivery"
+                  : "Card (Stripe)"
+              )
             )
           )
         ),

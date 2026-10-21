@@ -11,6 +11,7 @@ import {
   getAllOrders,
   getOrderById,
   getOrders,
+  markOrderPaid,
   receiveReturn,
   refundOrder,
   requestReplacement,
@@ -39,6 +40,8 @@ router.patch("/admin/cancel/:orderId", cancelOrderAdmin);
 // Admin confirms a returned item has reached the store (restocks it)
 router.patch("/admin/receivereturn/:orderId", receiveReturn);
 router.patch("/admin/refund/:orderId", refundOrder);
+// Admin records cash collected for a Cash on Delivery order
+router.patch("/admin/markpaid/:orderId", markOrderPaid);
 
 // Replacement / exchange (no money). Customer raises; admin dispatches + completes.
 router.patch("/replacement/request/:orderId", requestReplacement);

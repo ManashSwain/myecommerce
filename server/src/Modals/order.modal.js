@@ -136,17 +136,28 @@ const orderSchema = new mongoose.Schema(
       default: "placed",
     },
 
-    // Payment / refund tracking. Orders are paid at checkout in this project,
-    // so they start as "paid"; cancelling flips them to refund_pending and an
-    // admin refund flips them to refunded.
+    // How the order is paid for:
+    //   stripe → card paid up-front through Stripe Checkout
+    //   cod    → cash collected when the order is delivered
+    paymentMethod: {
+      type: String,
+      enum: ["stripe", "cod"],
+      default: "stripe",
+    },
+
+    // Payment / refund tracking. Stripe orders are only created after payment
+    // succeeds, so they start "paid". COD orders start "pending" until an
+    // admin records the cash. Cancelling a paid order flips it to
+    // refund_pending; an admin refund flips it to refunded. An unpaid COD
+    // order has nothing to refund.
     paymentStatus: {
       type: String,
       enum: ["pending", "paid", "refund_pending", "refunded"],
-      default: "paid",
+      default: "pending",
     },
 
-    // External payment (currently Stripe) reference details, kept so refunds
-    // and reconciliation can find the original charge.
+    // External payment reference details. Stripe stores the session/intent;
+    // COD stores the collection reference (if any) and when cash was received.
     payment: {
       provider: {
         type: String,
@@ -156,6 +167,12 @@ const orderSchema = new mongoose.Schema(
       },
       paymentIntentId: {
         type: String,
+      },
+      reference: {
+        type: String,
+      },
+      paidAt: {
+        type: Date,
       },
     },
 

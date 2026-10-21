@@ -46,6 +46,11 @@ const NON_CANCELLABLE_STATUSES = [
   "replacement_completed",
 ];
 
+// Cash on Delivery orders are the only ones that can sit unpaid after
+// placement. Orders created before the field existed are card/Stripe orders.
+const isCodOrder = (order) =>
+  order.paymentMethod === "cod" || order.payment?.provider === "cod";
+
 // Put the ordered quantities back into product variant stock. Called when an
 // order is cancelled (the mirror of the decrement done at order time).
 const restockOrderItems = async (order) => {
@@ -97,17 +102,20 @@ const deductReplacementStock = async (order) => {
 //     (see receiveReturn).
 const applyCancellation = async (order, { cancelledBy, reason }) => {
   const wasShipped = order.status === "shipped";
+  // Stripe orders (and COD orders whose cash was already collected) were
+  // paid, so cancelling owes a refund. An unpaid COD order has no money to
+  // return — never create a phantom refund for it.
+  const wasPaid = order.paymentStatus === "paid";
 
   order.status = wasShipped ? "return_in_transit" : "cancelled";
-  // Money was collected at checkout, so a refund is now owed.
-  order.paymentStatus = "refund_pending";
+  order.paymentStatus = wasPaid ? "refund_pending" : "pending";
   order.cancellation = {
     cancelledBy,
     reason: reason || "",
     cancelledAt: new Date(),
     wasShipped,
-    refundStatus: "pending",
-    refundAmount: order.total,
+    refundStatus: wasPaid ? "pending" : "not_required",
+    refundAmount: wasPaid ? order.total : 0,
     stockRestored: false,
   };
   await order.save();
@@ -259,6 +267,11 @@ const validateCheckoutPayload = ({ userId, contactEmail, shippingAddress }) => {
     !shippingAddress.pincode
   ) {
     return "A complete shipping address is required";
+  }
+  // The order schema requires a phone number — reject before charging so a
+  // shopper can never pay for an order we can't create.
+  if (!shippingAddress.phone || !String(shippingAddress.phone).trim()) {
+    return "A phone number is required";
   }
   return null;
 };
@@ -472,11 +485,13 @@ export const confirmCheckout = async (req, res) => {
       taxes: totals.taxes,
       total: totals.total,
       status: "placed",
+      paymentMethod: "stripe",
       paymentStatus: "paid",
       payment: {
         provider: "stripe",
         sessionId: session.id,
         paymentIntentId,
+        paidAt: new Date(),
       },
     });
 
@@ -603,6 +618,7 @@ export const createOrder = async (req, res) => {
       shippingAddress,
       deliveryMethod = "Standard",
       shipping = 0,
+      paymentMethod = "cod",
     } = req.body;
 
     if (!userId) {
@@ -625,6 +641,20 @@ export const createOrder = async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "A complete shipping address is required" });
+    }
+    // Card payments must go through Stripe's hosted checkout — this endpoint
+    // places Cash on Delivery orders only.
+    if (paymentMethod !== "cod") {
+      return res.status(400).json({
+        success: false,
+        message: "Card payments must use the secure checkout session.",
+      });
+    }
+    if (!shippingAddress.phone || !String(shippingAddress.phone).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "A phone number is required for Cash on Delivery.",
+      });
     }
 
     const cart = await Cart.findOne({ userId }).populate("items.product");
@@ -688,6 +718,11 @@ export const createOrder = async (req, res) => {
       taxes,
       total,
       status: "placed",
+      // Cash on Delivery: the order is placed and stock is reserved now, but
+      // payment isn't collected until the courier hands over the goods.
+      paymentMethod: "cod",
+      paymentStatus: "pending",
+      payment: { provider: "cod" },
     });
 
     // Reduce stock for the ordered variants now that the order is placed.
@@ -736,6 +771,7 @@ export const createDirectOrder = async (req, res) => {
       deliveryMethod = "Standard",
       shipping = 0,
       items: rawItems,
+      paymentMethod = "cod",
     } = req.body;
 
     if (!userId) {
@@ -758,6 +794,20 @@ export const createDirectOrder = async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "A complete shipping address is required" });
+    }
+    // Card payments must go through Stripe's hosted checkout — this endpoint
+    // places Cash on Delivery orders only.
+    if (paymentMethod !== "cod") {
+      return res.status(400).json({
+        success: false,
+        message: "Card payments must use the secure checkout session.",
+      });
+    }
+    if (!shippingAddress.phone || !String(shippingAddress.phone).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "A phone number is required for Cash on Delivery.",
+      });
     }
     if (!Array.isArray(rawItems) || rawItems.length === 0) {
       return res
@@ -832,6 +882,10 @@ export const createDirectOrder = async (req, res) => {
       taxes,
       total,
       status: "placed",
+      // Cash on Delivery: stock is reserved now, cash is collected on arrival.
+      paymentMethod: "cod",
+      paymentStatus: "pending",
+      payment: { provider: "cod" },
     });
 
     // Reduce stock for the ordered variants now that the order is placed
@@ -1027,11 +1081,18 @@ export const cancelMyOrder = async (req, res) => {
       reason,
     });
 
+    const refundRequired =
+      cancelled.cancellation?.refundStatus !== "not_required";
+
     return res.status(200).json({
       success: true,
       message: cancelled.cancellation?.wasShipped
-        ? "Order cancelled. We'll arrange pickup of your parcel and process the refund once it reaches us."
-        : "Order cancelled. Your refund will be processed shortly.",
+        ? refundRequired
+          ? "Order cancelled. We'll arrange pickup of your parcel and process the refund once it reaches us."
+          : "Order cancelled. We'll arrange pickup of your parcel."
+        : refundRequired
+          ? "Order cancelled. Your refund will be processed shortly."
+          : "Order cancelled. No payment was collected, so there's nothing to refund.",
       data: cancelled,
     });
   } catch (err) {
@@ -1455,6 +1516,15 @@ export const refundOrder = async (req, res) => {
       });
     }
 
+    // Unpaid COD cancellations have no money to return.
+    if (order.cancellation?.refundStatus === "not_required") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "No payment was collected for this order, so there is nothing to refund.",
+      });
+    }
+
     if (order.cancellation?.refundStatus === "completed") {
       return res.status(400).json({
         success: false,
@@ -1495,6 +1565,83 @@ export const refundOrder = async (req, res) => {
     });
   } catch (err) {
     console.error("refundOrder error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// MARK COD ORDER PAID (patch) — admin.
+// Cash on Delivery orders are created unpaid. Once the courier hands over the
+// cash (or the customer pays in advance), an admin records it here so the
+// order stops showing as pending and can be refunded normally if it is later
+// cancelled. Only COD orders that are still awaiting payment qualify.
+export const markOrderPaid = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { reference } = req.body || {};
+
+    if (!mongoose.isValidObjectId(orderId)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid order ID" });
+    }
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    if (!isCodOrder(order)) {
+      return res.status(400).json({
+        success: false,
+        message: "Only Cash on Delivery orders can be marked as paid here.",
+      });
+    }
+
+    if (order.paymentStatus !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message:
+          order.paymentStatus === "paid"
+            ? "This order has already been paid."
+            : "This order is not awaiting payment.",
+      });
+    }
+
+    if (["cancelled", "refunded", "return_in_transit"].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "A cancelled or returned order can't be marked as paid.",
+      });
+    }
+
+    order.paymentStatus = "paid";
+    const existingPayment = order.payment?.toObject
+      ? order.payment.toObject()
+      : order.payment || {};
+    order.payment = {
+      ...existingPayment,
+      provider: "cod",
+      reference: reference
+        ? String(reference).trim()
+        : existingPayment.reference || "",
+      paidAt: new Date(),
+    };
+    await order.save();
+
+    notifyOrderStatus(order);
+
+    return res.status(200).json({
+      success: true,
+      message: "Cash collection recorded — order marked as paid.",
+      data: order,
+    });
+  } catch (err) {
+    console.error("markOrderPaid error:", err);
     return res.status(500).json({
       success: false,
       message: err.message,

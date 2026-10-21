@@ -97,6 +97,23 @@ export const completeReplacementAdmin = async (
   return json.data;
 };
 
+// Admin records that cash was collected for a Cash on Delivery order.
+export const markOrderPaidAdmin = async (orderId, reference = "") => {
+  const res = await fetch(
+    `${API_BASE_URL}/api/order/admin/markpaid/${orderId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reference }),
+    }
+  );
+  const json = await res.json();
+  if (!res.ok || json.success === false) {
+    throw new Error(json.message || "Could not mark the order as paid");
+  }
+  return json.data;
+};
+
 // Admin processes the refund for a cancelled order. Optional transaction
 // reference is stored on the order.
 export const refundOrderAdmin = async (orderId, refundReference = "") => {
