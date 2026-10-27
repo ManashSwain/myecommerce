@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router'
 import Footer from '../components/Footer'
 import Navbar from '../components/Navbar'
+import Aichatbox from '../components/Aichatbox'
 import AccountStatusProvider from '../components/AccountStatusProvider'
 
 const Rootlayout = () => {
@@ -9,6 +10,7 @@ const Rootlayout = () => {
    <Navbar/>
    <Outlet/>
    <Footer/>
+   <Aichatbox/>
    </AccountStatusProvider>
   )
 }
