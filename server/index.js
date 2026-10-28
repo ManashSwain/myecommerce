@@ -25,6 +25,7 @@ import newsletterrouter from "./src/Routes/newsletter.route.js"
 import wishlistRouter from "./src/Routes/wishlist.route.js";
 import analyticsrouter from "./src/Routes/analytics.route.js";
 import adminrouter from "./src/Routes/admin.route.js";
+import chatrouter from "./src/Routes/chat.route.js";
 
 // Stripe webhook controller (needs the RAW body for signature verification)
 import { stripeWebhook } from "./src/Controllers/order.controller.js";
@@ -76,6 +77,8 @@ app.use("/api/wishlist", wishlistRouter);
 app.use("/api/analytics", analyticsrouter);
 // admin allow-list (Auth0-protected)
 app.use("/api/admins", adminrouter);
+// AI shopping assistant (Gemini-backed)
+app.use("/api/chat", chatrouter);
 
 // multer + cloudinary route
 app.post("/photos/upload", upload.array('photos'), async (req,res,next)=>{
