@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router'
+import { Show } from '@clerk/react'
 import Footer from '../components/Footer'
 import Navbar from '../components/Navbar'
 import Aichatbox from '../components/Aichatbox'
@@ -10,7 +11,9 @@ const Rootlayout = () => {
    <Navbar/>
    <Outlet/>
    <Footer/>
+   <Show when="signed-in">
    <Aichatbox/>
+   </Show>
    </AccountStatusProvider>
   )
 }

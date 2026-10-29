@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@clerk/react";
 import {
   ArrowPathIcon,
   PaperAirplaneIcon,
@@ -47,6 +48,7 @@ const TypingDots = () => (
 );
 
 const Aichatbox = () => {
+  const { isSignedIn, getToken } = useAuth();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState(() => [createGreeting()]);
   const [draft, setDraft] = useState("");
@@ -90,7 +92,7 @@ const Aichatbox = () => {
 
   const sendMessage = async (rawText) => {
     const text = rawText.trim();
-    if (!text || isTyping) return;
+    if (!text || isTyping || !isSignedIn) return;
 
     // Snapshot the conversation before adding the new turn. The server drops
     // the leading assistant greeting and caps the history length.
@@ -112,9 +114,17 @@ const Aichatbox = () => {
     requestRef.current = controller;
 
     try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Please sign in to use the assistant.");
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ message: text, history }),
         signal: controller.signal,
       });

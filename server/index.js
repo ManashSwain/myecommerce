@@ -1,7 +1,9 @@
+// Load .env before importing any module that reads configuration at import
+// time (Clerk middleware, Stripe, Cloudinary, ...).
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-dotenv.config();
+import { clerkMiddleware } from "@clerk/express";
 import { connectDb } from "./src/utils/connectDB.js";
 
 // Multer import
@@ -52,6 +54,11 @@ app.post(
 // Express middlewares — MUST be registered before the routers so JSON request
 // bodies (e.g. the block reason, cart items, orders) are parsed.
 app.use(express.json());
+
+// Attach Clerk's auth state to each request. Routes opt in to requiring a
+// signed-in user (see the chat router); public storefront routes stay public.
+app.use(clerkMiddleware());
+
 // Route Middlewares
 app.use("/api", userrouter);
 // Route Middlewares
