@@ -1,5 +1,6 @@
 import React from 'react'
 import BackToHome from './BackToHome'
+import Supporttickets from './Supporttickets'
 
 const Contact = () => {
   return (
@@ -83,6 +84,8 @@ const Contact = () => {
       </div>
     </div>
   </div>
+
+  <Supporttickets />
 
   <p className="leading-7">
     Our support team will do its best to respond to your

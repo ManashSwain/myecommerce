@@ -18,6 +18,7 @@ import {
 import {
   Bars3Icon,
   HeartIcon,
+  LifebuoyIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
   QuestionMarkCircleIcon,
@@ -58,7 +59,7 @@ const Navbar = () => {
         return;
       }
       setCart(json.data);
-    } catch (err) {
+    } catch {
       setCart(null);
     }
   };
@@ -259,6 +260,11 @@ const Navbar = () => {
         label="My orders"
         href="/orders"
         labelIcon={<ShoppingBagIcon aria-hidden="true" className="size-4" />}
+      />
+      <UserButton.Link
+        label="Support tickets"
+        href="/contact#support-ticket"
+        labelIcon={<LifebuoyIcon aria-hidden="true" className="size-4" />}
       />
       <UserButton.Link
         label="FAQ"

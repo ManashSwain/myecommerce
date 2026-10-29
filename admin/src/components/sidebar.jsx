@@ -9,6 +9,7 @@ import {
   FileText,
   PieChart,
   MessageSquare,
+  LifeBuoy,
 } from "lucide-react";
 
 const menuItems = [
@@ -19,6 +20,7 @@ const menuItems = [
   { name: "Sub categories", path: "/sub-categories", icon: Calendar },
   { name: "Products", path: "/products", icon: FileText },
   { name: "Orders", path: "/orders", icon: PieChart },
+  { name: "Tickets", path: "/tickets", icon: LifeBuoy },
   { name: "Reviews", path: "/reviews", icon: MessageSquare },
 ];
 
@@ -43,7 +45,7 @@ const Sidebar = () => {
                   }`
                 }
               >
-                <Icon size={18} />
+                {Icon && <Icon size={18} />}
                 <span className="text-sm font-medium">{name}</span>
               </NavLink>
             ))}

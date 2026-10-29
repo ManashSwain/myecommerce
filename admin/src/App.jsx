@@ -13,6 +13,7 @@ import Subcategories from "./components/Subcategories";
 import Products from "./components/Products";
 import Orders from "./components/Orders";
 import Reviews from "./components/Reviews";
+import Tickets from "./components/Tickets";
 import Dashboard from "./components/Dashboard";
 import Toast from "./components/Toast";
 import LoggedOut from "./components/LoggedOut";
@@ -33,6 +34,7 @@ const router = createBrowserRouter([
       { path: "sub-categories", element: <Subcategories/>},
       { path: "products", element: <Products/> },
       { path: "orders", element: <Orders/> },
+      { path: "tickets", element: <Tickets/> },
       { path: "reviews", element: <Reviews/> },
     ],
   },
