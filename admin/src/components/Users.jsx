@@ -7,9 +7,13 @@ import {
   NoSymbolIcon,
   UserPlusIcon,
   ShieldCheckIcon,
+  EyeIcon,
+  EyeSlashIcon,
 } from "@heroicons/react/24/outline";
 import { getAllUsers, setUserBlocked } from "../utils/user";
 import ConfirmModal from "./ConfirmModal";
+
+const MASKED_CONTACT = "••••••••••••";
 
 // Amounts are in Indian Rupees to match the storefront (cart/checkout use ₹).
 const formatCurrency = (value) =>
@@ -87,6 +91,9 @@ const Users = () => {
   const [status, setStatus] = useState("all");
   const [limit, setLimit] = useState(10);
   const [page, setPage] = useState(1);
+  // Contact details are masked by default. A per-user eye toggle reveals the
+  // email and username without sending anything extra to the browser.
+  const [revealedUsers, setRevealedUsers] = useState(() => new Set());
 
   // Block / unblock dialog
   const [blockTarget, setBlockTarget] = useState(null); // user object
@@ -118,6 +125,7 @@ const Users = () => {
         status,
       });
       setUsers(result.users);
+      setRevealedUsers(new Set());
       setSummary(result.summary);
       setPagination(result.pagination);
       // Keep the page in range if the server clamped it.
@@ -133,6 +141,9 @@ const Users = () => {
   };
 
   useEffect(() => {
+    // Loading users is the effect's external sync; the loading state makes the
+    // initial fetch visible in the list.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSearch, page, limit, status]);
@@ -162,6 +173,15 @@ const Users = () => {
   const openBlockDialog = (user) => {
     setBlockReason("");
     setBlockTarget(user);
+  };
+
+  const toggleContactDetails = (userId) => {
+    setRevealedUsers((current) => {
+      const next = new Set(current);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
   };
 
   // ----- Pagination window (1 … current ± 1 … last) ---------------------
@@ -323,100 +343,125 @@ const Users = () => {
         </div>
       ) : (
         <div className="mt-6 space-y-3">
-          {users.map((user) => (
-            <div
-              key={user._id}
-              className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
-              {/* Identity */}
-              <div className="flex min-w-0 items-center gap-4">
-                {user.image ? (
-                  <img
-                    src={user.image}
-                    alt={user.fullName}
-                    className="size-12 shrink-0 rounded-full object-cover"
-                  />
-                ) : (
-                  <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
-                    {initials(user)}
-                  </span>
-                )}
-                <div className="min-w-0">
-                  <p className="flex items-center gap-2 truncate text-sm font-semibold text-gray-900">
-                    {user.fullName}
-                    {user.isBlocked ? (
-                      <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
-                        Blocked
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                        Active
-                      </span>
-                    )}
-                  </p>
-                  <p className="truncate text-xs text-gray-500">{user.email}</p>
-                  {user.username && (
-                    <p className="truncate text-xs text-gray-400">
-                      @{user.username}
-                    </p>
-                  )}
-                  {user.isBlocked && user.blockReason && (
-                    <p className="mt-1 truncate text-xs text-red-600">
-                      Reason: {user.blockReason}
-                      {user.blockedAt ? ` · ${formatDate(user.blockedAt)}` : ""}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Activity + joined + action */}
-              <div className="flex flex-wrap items-center gap-x-8 gap-y-2 sm:justify-end">
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-gray-900">
-                    {user.orderCount}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    order{user.orderCount === 1 ? "" : "s"}
-                  </p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-gray-900">
-                    {formatCurrency(user.totalSpent)}
-                  </p>
-                  <p className="text-xs text-gray-500">spent</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-gray-900">
-                    {formatDate(user.createdAt)}
-                  </p>
-                  <p className="text-xs text-gray-500">joined</p>
-                </div>
-
-                {/* Block / Unblock action */}
-                <button
-                  type="button"
-                  onClick={() => openBlockDialog(user)}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
-                    user.isBlocked
-                      ? "border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                      : "border border-red-300 text-red-700 hover:bg-red-50"
-                  }`}
-                >
-                  {user.isBlocked ? (
-                    <>
-                      <ShieldCheckIcon className="size-4" />
-                      Unblock
-                    </>
+          {users.map((user) => {
+            const contactVisible = revealedUsers.has(user._id);
+            return (
+              <div
+                key={user._id}
+                className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+              >
+                {/* Identity */}
+                <div className="flex min-w-0 items-center gap-4">
+                  {user.image ? (
+                    <img
+                      src={user.image}
+                      alt={user.fullName}
+                      className="size-12 shrink-0 rounded-full object-cover"
+                    />
                   ) : (
-                    <>
-                      <NoSymbolIcon className="size-4" />
-                      Block
-                    </>
+                    <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-semibold text-blue-600">
+                      {initials(user)}
+                    </span>
                   )}
-                </button>
+                  <div className="min-w-0">
+                    <p className="flex items-center gap-2 truncate text-sm font-semibold text-gray-900">
+                      {user.fullName}
+                      {user.isBlocked ? (
+                        <span className="rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">
+                          Blocked
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                          Active
+                        </span>
+                      )}
+                    </p>
+                    <div className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                      <p className="min-w-0 truncate text-xs text-gray-500">
+                        {contactVisible ? user.email : MASKED_CONTACT}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => toggleContactDetails(user._id)}
+                        aria-label={`${contactVisible ? "Hide" : "Show"} email and username for ${user.fullName}`}
+                        aria-pressed={contactVisible}
+                        title={
+                          contactVisible
+                            ? "Hide email and username"
+                            : "Show email and username"
+                        }
+                        className="shrink-0 rounded p-0.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                      >
+                        {contactVisible ? (
+                          <EyeSlashIcon aria-hidden="true" className="size-4" />
+                        ) : (
+                          <EyeIcon aria-hidden="true" className="size-4" />
+                        )}
+                      </button>
+                    </div>
+                    {user.username && (
+                      <p className="truncate text-xs text-gray-400">
+                        @{contactVisible ? user.username : MASKED_CONTACT}
+                      </p>
+                    )}
+                    {user.isBlocked && user.blockReason && (
+                      <p className="mt-1 truncate text-xs text-red-600">
+                        Reason: {user.blockReason}
+                        {user.blockedAt ? ` · ${formatDate(user.blockedAt)}` : ""}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Activity + joined + action */}
+                <div className="flex flex-wrap items-center gap-x-8 gap-y-2 sm:justify-end">
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-gray-900">
+                      {user.orderCount}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      order{user.orderCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-gray-900">
+                      {formatCurrency(user.totalSpent)}
+                    </p>
+                    <p className="text-xs text-gray-500">spent</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-gray-900">
+                      {formatDate(user.createdAt)}
+                    </p>
+                    <p className="text-xs text-gray-500">joined</p>
+                  </div>
+
+                  {/* Block / Unblock action */}
+                  <button
+                    type="button"
+                    onClick={() => openBlockDialog(user)}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${
+                      user.isBlocked
+                        ? "border border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                        : "border border-red-300 text-red-700 hover:bg-red-50"
+                    }`}
+                  >
+                    {user.isBlocked ? (
+                      <>
+                        <ShieldCheckIcon className="size-4" />
+                        Unblock
+                      </>
+                    ) : (
+                      <>
+                        <NoSymbolIcon className="size-4" />
+                        Block
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
