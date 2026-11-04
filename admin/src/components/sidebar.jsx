@@ -11,6 +11,7 @@ import {
   MessageSquare,
   LifeBuoy,
   Mail,
+  Bot,
 } from "lucide-react";
 
 const menuItems = [
@@ -23,6 +24,7 @@ const menuItems = [
   { name: "Orders", path: "/orders", icon: PieChart },
   { name: "Tickets", path: "/tickets", icon: LifeBuoy },
   { name: "Email", path: "/email", icon: Mail },
+  { name: "AI assistant", path: "/ai-assistant", icon: Bot },
   { name: "Reviews", path: "/reviews", icon: MessageSquare },
 ];
 

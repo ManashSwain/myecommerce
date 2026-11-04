@@ -30,6 +30,7 @@ import adminrouter from "./src/Routes/admin.route.js";
 import chatrouter from "./src/Routes/chat.route.js";
 import ticketrouter from "./src/Routes/ticket.route.js";
 import emailSettingsrouter from "./src/Routes/emailSettings.route.js";
+import aiSettingsrouter from "./src/Routes/aiSettings.route.js";
 
 // Stripe webhook controller (needs the RAW body for signature verification)
 import { stripeWebhook } from "./src/Controllers/order.controller.js";
@@ -92,6 +93,8 @@ app.use("/api/chat", chatrouter);
 app.use("/api/tickets", ticketrouter);
 // Admin-controlled order-status email delivery
 app.use("/api/email-settings", emailSettingsrouter);
+// Admin-controlled AI assistant availability (public /status for storefront)
+app.use("/api/ai-settings", aiSettingsrouter);
 
 // multer + cloudinary route
 app.post("/photos/upload", upload.array('photos'), async (req,res,next)=>{

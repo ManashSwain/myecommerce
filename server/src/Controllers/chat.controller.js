@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { Product } from "../Modals/product.modal.js";
 import { buildChatSystemPrompt } from "../prompts/index.js";
+import { readAiSettings } from "../utils/aiSettings.js";
 
 const DEFAULT_MODEL = "gemini-3.8-flash";
 const DEFAULT_FALLBACK_MODELS = ["gemini-flash-latest"];
@@ -336,6 +337,32 @@ export const chat = async (req, res) => {
       return res.status(429).json({
         success: false,
         message: "You're sending messages too quickly. Please wait a moment and try again.",
+      });
+    }
+
+    // Admin-controlled global switch. Checked server-side on every request so
+    // hiding the launcher is not the only boundary.
+    let aiSettings;
+    try {
+      aiSettings = await readAiSettings();
+    } catch (error) {
+      console.error(
+        "chat: could not read AI assistant settings:",
+        error?.message || error,
+      );
+      return res.status(503).json({
+        success: false,
+        message:
+          "The assistant is unavailable right now. Please try again in a moment.",
+      });
+    }
+
+    if (!aiSettings.enabled) {
+      return res.status(403).json({
+        success: false,
+        code: "AI_DISABLED",
+        message:
+          "The AI assistant is currently turned off. Please try again later.",
       });
     }
 

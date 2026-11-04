@@ -53,6 +53,8 @@ const Aichatbox = () => {
   const [messages, setMessages] = useState(() => [createGreeting()]);
   const [draft, setDraft] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  // Hidden until the public settings endpoint confirms the assistant is on.
+  const [isAvailable, setIsAvailable] = useState(false);
 
   const inputRef = useRef(null);
   const scrollRef = useRef(null);
@@ -89,6 +91,33 @@ const Aichatbox = () => {
     },
     [],
   );
+
+  // Admins can turn the assistant off for everyone. The chat endpoint enforces
+  // the same switch; this check only decides whether to show the launcher.
+  // Fail closed if availability cannot be confirmed.
+  useEffect(() => {
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/ai-settings/status`,
+          { signal: controller.signal },
+        );
+        const payload = await response.json().catch(() => null);
+
+        setIsAvailable(
+          response.ok &&
+            payload?.success === true &&
+            payload?.data?.enabled === true,
+        );
+      } catch (error) {
+        if (error.name !== "AbortError") setIsAvailable(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, []);
 
   const sendMessage = async (rawText) => {
     const text = rawText.trim();
@@ -184,6 +213,8 @@ const Aichatbox = () => {
   };
 
   const showSuggestions = messages.length === 1;
+
+  if (!isAvailable) return null;
 
   return (
     <>
