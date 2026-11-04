@@ -10,6 +10,7 @@ import {
   PieChart,
   MessageSquare,
   LifeBuoy,
+  Mail,
 } from "lucide-react";
 
 const menuItems = [
@@ -21,6 +22,7 @@ const menuItems = [
   { name: "Products", path: "/products", icon: FileText },
   { name: "Orders", path: "/orders", icon: PieChart },
   { name: "Tickets", path: "/tickets", icon: LifeBuoy },
+  { name: "Email", path: "/email", icon: Mail },
   { name: "Reviews", path: "/reviews", icon: MessageSquare },
 ];
 

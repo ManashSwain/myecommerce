@@ -1,13 +1,10 @@
 import { Resend } from "resend";
 import { renderOrderStatusEmail } from "../emails/Orderstatus.js";
+import { isOrderStatusEmailEnabled } from "./orderEmailSettings.js";
 
-// ---------------------------------------------------------------------------
-// FEATURE FLAG: order-status emails are temporarily disabled.
-// Set EMAIL_ENABLED=true in the server .env (or flip the default below) to
-// re-enable. The guard in sendOrderStatusEmail() below is the single switch
-// that turns all email sending off — no code is removed, just bypassed.
-// ---------------------------------------------------------------------------
-const EMAIL_ENABLED = process.env.EMAIL_ENABLED === "true";
+// Order-status emails are enabled per status from Admin → Email. A missing
+// settings document means nothing is sent, so deploying this code does not
+// start emailing customers until an admin opts in.
 
 // Create the Resend client lazily. ESM hoists imports, so this module is
 // evaluated before index.js calls dotenv.config() — constructing Resend at
@@ -36,11 +33,13 @@ const FROM_ADDRESS = process.env.RESEND_FROM || "onboarding@resend.dev";
  * @returns {Promise<{id: string}>} the Resend result data.
  */
 export const sendOrderStatusEmail = async (order, options = {}) => {
-  // Emails are disabled for now — return early without sending anything.
-  // Flip EMAIL_ENABLED to true (see top of file) to re-enable.
-  if (!EMAIL_ENABLED) {
+  const status = order?.status || "placed";
+
+  // The admin panel controls delivery for every status, plus a global pause.
+  // Reading the setting here keeps every call site gated by the same rules.
+  if (!(await isOrderStatusEmailEnabled(status))) {
     console.log(
-      `[email] disabled — skipped order-status email for ${order?.orderNumber || "order"}`
+      `[email] skipped order-status email for ${order?.orderNumber || "order"} — ${status} is disabled in Admin → Email`
     );
     return { id: null, skipped: true };
   }

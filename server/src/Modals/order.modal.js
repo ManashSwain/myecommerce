@@ -1,5 +1,23 @@
 import mongoose from "mongoose";
 
+// Every order status. Kept in one place so the order schema and the
+// admin-controlled email settings always agree on the available statuses.
+export const ORDER_STATUSES = [
+  "placed",
+  "processing",
+  "shipped",
+  "delivered",
+  "return_requested",
+  "return_in_transit",
+  "return_received",
+  "returned",
+  "cancelled",
+  "refunded",
+  "replacement_requested",
+  "replacement_out",
+  "replacement_completed",
+];
+
 // A single purchased line item. Product details are snapshotted at
 // purchase time so the order stays accurate even if the product is
 // later edited or deleted.
@@ -158,21 +176,7 @@ const orderSchema = new mongoose.Schema(
     //   delivered → replacement_requested → replacement_out → replacement_completed
     status: {
       type: String,
-      enum: [
-        "placed",
-        "processing",
-        "shipped",
-        "delivered",
-        "return_requested",
-        "return_in_transit",
-        "return_received",
-        "returned",
-        "cancelled",
-        "refunded",
-        "replacement_requested",
-        "replacement_out",
-        "replacement_completed",
-      ],
+      enum: ORDER_STATUSES,
       default: "placed",
     },
 

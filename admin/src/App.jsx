@@ -14,6 +14,7 @@ import Products from "./components/Products";
 import Orders from "./components/Orders";
 import Reviews from "./components/Reviews";
 import Tickets from "./components/Tickets";
+import Email from "./components/Email";
 import Dashboard from "./components/Dashboard";
 import Toast from "./components/Toast";
 import LoggedOut from "./components/LoggedOut";
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
       { path: "products", element: <Products/> },
       { path: "orders", element: <Orders/> },
       { path: "tickets", element: <Tickets/> },
+      { path: "email", element: <Email/> },
       { path: "reviews", element: <Reviews/> },
     ],
   },
