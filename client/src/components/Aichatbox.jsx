@@ -223,7 +223,7 @@ const Aichatbox = () => {
           id="ai-chat-panel"
           role="dialog"
           aria-labelledby="ai-chat-title"
-          className="fixed inset-x-4 bottom-24 z-30 flex h-[min(72vh,560px)] animate-chat-pop flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-gray-900/20 motion-reduce:animate-none sm:inset-x-auto sm:right-6 sm:w-[380px]"
+          className="fixed inset-x-4 bottom-24 z-30 flex h-[min(72vh,560px)] animate-chat-pop flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl shadow-gray-900/20 motion-reduce:animate-none sm:inset-x-auto sm:right-6 sm:w-95"
         >
           {/* Header */}
           <div className="relative overflow-hidden bg-linear-to-br from-indigo-600 via-indigo-600 to-violet-600 px-4 py-4 text-white">
