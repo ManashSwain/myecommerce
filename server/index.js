@@ -40,11 +40,69 @@ import dns from "dns";
 
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 
+// ---------------------------------------------------------------------------
+// CORS allow-list.
+//
+// Only the storefront and the admin panel may read API responses from a
+// browser. Requests without an Origin header (curl, Stripe webhooks, other
+// server-to-server calls) are not browser CORS requests, so they skip this
+// check; every protected route still verifies its own token.
+// ---------------------------------------------------------------------------
+
+const normalizeOrigin = (value) => {
+  try {
+    return new URL(String(value).trim()).origin;
+  } catch {
+    return null;
+  }
+};
+
+const parseOrigins = (value) =>
+  String(value || "")
+    .split(",")
+    .map(normalizeOrigin)
+    .filter(Boolean);
+
+const configuredOrigins = parseOrigins(process.env.CORS_ORIGINS);
+const allowedOrigins = new Set(
+  configuredOrigins.length > 0
+    ? configuredOrigins
+    : [
+        normalizeOrigin(process.env.CLIENT_URL) || "http://localhost:5173",
+        normalizeOrigin(process.env.ADMIN_URL) || "http://localhost:5174",
+      ],
+);
+
+const corsOptions = {
+  origin(origin, callback) {
+    // No Origin header: not a browser cross-origin request.
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    return callback(null, false);
+  },
+  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+  maxAge: 86400,
+};
+
 const app = express();
 const PORT = 3000;
 
-// Middlewares
-app.use(cors());
+// Reject disallowed browser origins before any route runs. Without this,
+// cors() would still process the request and merely omit the response header.
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && !allowedOrigins.has(origin)) {
+    return res.status(403).json({
+      success: false,
+      code: "CORS_NOT_ALLOWED",
+      message: "This origin is not allowed to access the API.",
+    });
+  }
+  return next();
+});
+app.use(cors(corsOptions));
+
 
 // Stripe webhook MUST be mounted BEFORE express.json(), because signature
 // verification needs the raw request body rather than the parsed JSON.
@@ -122,6 +180,7 @@ connectDb();
 
 app.listen(PORT, () => {
   console.log(`App is listening on port ${PORT}`);
+  console.log(`CORS allowed origins: ${[...allowedOrigins].join(", ")}`);
 });
 
 
