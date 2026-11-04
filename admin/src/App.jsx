@@ -25,6 +25,7 @@ import { AdminSessionProvider } from "./context/AdminSessionProvider";
 import { getMyAdmin } from "./utils/admins";
 
 const router = createBrowserRouter([
+  { path: "/logged-out", element: <LoggedOut /> },
   {
     path: "/",
     element: <RootLayout />,
@@ -203,8 +204,9 @@ function App() {
   }
 
   // Logged-out landing page (shown right after logout; not auto-redirected).
+  // Rendered through the router so /logged-out is a real, refresh-safe route.
   if (isLoggedOutRoute) {
-    return <LoggedOut />;
+    return <RouterProvider router={router} />;
   }
 
   // Not authenticated yet → the effect above is redirecting to Auth0.
