@@ -1,7 +1,8 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
+  "private": true,
+  "description": "styloandco API server",
   "main": "index.js",
   "scripts": {
     "dev": "node --watch index.js",
@@ -12,6 +13,9 @@
   "author": "",
   "license": "ISC",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@clerk/express": "^2.0.8",
     "@google/genai": "^2.31.0",

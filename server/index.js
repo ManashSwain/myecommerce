@@ -86,7 +86,9 @@ const corsOptions = {
 };
 
 const app = express();
-const PORT = 3000;
+// Hosting platforms assign a port at runtime (Render, Railway, Heroku, ...).
+// Fall back to 3000 for local development.
+const PORT = Number(process.env.PORT) || 3000;
 
 // Reject disallowed browser origins before any route runs. Without this,
 // cors() would still process the request and merely omit the response header.
