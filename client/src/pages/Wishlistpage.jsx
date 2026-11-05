@@ -158,7 +158,7 @@ const Wishlistpage = () => {
                   {item.color} · {item.size}
                 </p>
                 <p className="mt-1 text-sm font-medium text-gray-900">
-                  ${item.product.price}
+                  ₹{item.product.price}
                 </p>
                 <div className="mt-3 flex gap-2">
                   <button

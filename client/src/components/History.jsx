@@ -98,7 +98,7 @@ const orders = [
     createdDatetime: '2021-07-06',
     deliveredDate: 'July 12, 2021',
     deliveredDatetime: '2021-07-12',
-    total: '$160.00',
+    total: '₹160.00',
     products: [
       {
         id: 1,
@@ -106,7 +106,7 @@ const orders = [
         description:
           'Are you a minimalist looking for a compact carry option? The Micro Backpack is the perfect size for your essential everyday carry items. Wear it like a backpack or carry it like a satchel for all-day use.',
         href: '#',
-        price: '$70.00',
+        price: '₹70.00',
         imageSrc: 'https://tailwindcss.com/plus-assets/img/ecommerce-images/order-history-page-03-product-01.jpg',
         imageAlt:
           'Moss green canvas compact backpack with double top zipper, zipper front pouch, and matching carry handle and backpack straps.',
@@ -117,7 +117,7 @@ const orders = [
         description:
           'This durable shopping tote is perfect for the world traveler. Its yellow canvas construction is water, fray, tear resistant. The matching handle, backpack straps, and shoulder loops provide multiple carry options for a day out on your next adventure.',
         href: '#',
-        price: '$90.00',
+        price: '₹90.00',
         imageSrc: 'https://tailwindcss.com/plus-assets/img/ecommerce-images/order-history-page-03-product-02.jpg',
         imageAlt: 'Bright yellow canvas tote with double-stitched straps, handle, and matching zipper.',
       },
@@ -131,7 +131,7 @@ const orders = [
     createdDatetime: '2020-12-22',
     deliveredDate: 'January 5, 2021',
     deliveredDatetime: '2021-01-05',
-    total: '$40.00',
+    total: '₹40.00',
     products: [
       {
         id: 1,
@@ -139,7 +139,7 @@ const orders = [
         description:
           'Save space and protect your favorite clothes in this double-layer garment bag. Each compartment easily holds multiple pairs of jeans or tops, while keeping your items neatly folded throughout your trip.',
         href: '#',
-        price: '$40.00',
+        price: '₹40.00',
         imageSrc: 'https://tailwindcss.com/plus-assets/img/ecommerce-images/order-history-page-03-product-03.jpg',
         imageAlt: 'Garment bag with two layers of grey and tan zipper pouches for folded shirts and pants.',
       },

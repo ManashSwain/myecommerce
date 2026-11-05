@@ -7,7 +7,8 @@ import { API_BASE_URL } from "../constants";
 // overall), computed server-side from real orders (no static / hardcoded data).
 const CARD_LIMIT = 4;
 
-const formatPrice = (amount) => `$${Number(amount || 0)}`;
+const formatPrice = (amount) =>
+  `₹${Number(amount || 0).toLocaleString("en-IN")}`;
 
 const SignatureEdit = () => {
   const [products, setProducts] = useState([]);
