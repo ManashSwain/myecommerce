@@ -361,9 +361,9 @@ const Orders = () => {
 
   // Generate and download the order's invoice as a PDF. Purely client-side —
   // the PDF is built from the order data already on screen (no DB writes).
-  const handleDownloadInvoice = (order) => {
+  const handleDownloadInvoice = async (order) => {
     try {
-      downloadInvoice(order);
+      await downloadInvoice(order);
       toast.success("Invoice downloaded");
     } catch (err) {
       console.error(err);

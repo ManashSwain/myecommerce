@@ -1,4 +1,5 @@
 import { jsPDF } from "jspdf";
+import invoiceLogoUrl from "../../assets/styloandco-invoice-logo.png";
 
 // ---------------------------------------------------------------------------
 // Client-side invoice generator.
@@ -10,14 +11,26 @@ import { jsPDF } from "jspdf";
 
 // Shop identity shown on the invoice header. Adjust these to match your brand.
 const SHOP = {
-  name: "My Ecommerce",
-  tagline: "Quality goods, delivered.",
+  name: "styloandco",
+  tagline: "Style That Speaks",
   // Invoice "from" details (address / contact / tax id)
-  addressLines: ["123 Market Street", "Bengaluru, Karnataka 560001", "India"],
-  email: "support@myecommerce.example",
-  phone: "+91 90000 00000",
-  gstin: "29ABCDE1234F1Z5",
+  addressLines: ["123 Fashion Street", "New York, NY 10001", "USA"],
+  email: "support@styloandco.com",
+  phone: "+1 (555) 123-4567",
+  // Add the registered GSTIN here if you have one. When blank, the invoice
+  // omits the tax-id line rather than printing a placeholder.
+  gstin: "",
 };
+
+// jsPDF draws synchronously, but the logo is loaded from an image URL. Resolve
+// it before building the document so the header is complete on the first save.
+const loadImage = (src) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Could not load the invoice logo"));
+    image.src = src;
+  });
 
 const money = (amount) =>
   `Rs. ${Number(amount || 0).toLocaleString("en-IN", {
@@ -105,7 +118,10 @@ const drawField = (doc, label, value, x, y, maxWidth = 78) => {
   return y + 5 + lines.length * 5;
 };
 
-export const downloadInvoice = (order) => {
+export const downloadInvoice = async (order) => {
+  // A missing logo must not block the invoice; fall back to the wordmark.
+  const logo = await loadImage(invoiceLogoUrl).catch(() => null);
+
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -116,13 +132,39 @@ export const downloadInvoice = (order) => {
   // --- Header band ---------------------------------------------------------
   doc.setFillColor(79, 70, 229); // indigo-600
   doc.rect(0, 0, pageWidth, 30, "F");
+
+  // App logo on a light card so the indigo band doesn't tint the artwork.
+  const logoBox = { x: margin, y: 4.5, width: 27, height: 21.5 };
+  if (logo) {
+    doc.setFillColor(255, 255, 255);
+    doc.roundedRect(
+      logoBox.x,
+      logoBox.y,
+      logoBox.width,
+      logoBox.height,
+      2,
+      2,
+      "F",
+    );
+    const logoWidth = 24;
+    const logoHeight = logoWidth * (307 / 384);
+    doc.addImage(
+      logo,
+      "PNG",
+      logoBox.x + (logoBox.width - logoWidth) / 2,
+      logoBox.y + (logoBox.height - logoHeight) / 2,
+      logoWidth,
+      logoHeight,
+    );
+  }
+
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  doc.text(SHOP.name, margin, 14);
+  doc.text(SHOP.name, logo ? 48 : margin, 14);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  doc.text(SHOP.tagline, margin, 21);
+  doc.text(SHOP.tagline, logo ? 48 : margin, 21);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.text("INVOICE", contentRight, 17, { align: "right" });
@@ -143,7 +185,9 @@ export const downloadInvoice = (order) => {
   let leftBottom = y + 5 + SHOP.addressLines.length * 4.5;
   doc.text(SHOP.email, margin, leftBottom);
   doc.text(SHOP.phone, margin, leftBottom + 4.5);
-  doc.text(`GSTIN: ${SHOP.gstin}`, margin, leftBottom + 9);
+  if (SHOP.gstin) {
+    doc.text(`GSTIN: ${SHOP.gstin}`, margin, leftBottom + 9);
+  }
 
   // Invoice meta block (right aligned)
   const metaX = contentRight;
