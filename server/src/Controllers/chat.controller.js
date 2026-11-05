@@ -1,5 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
+import { clerkClient } from "@clerk/express";
+import mongoose from "mongoose";
 import { Product } from "../Modals/product.modal.js";
+import ChatLog from "../Modals/chatLog.modal.js";
+import User from "../Modals/user.modal.js";
 import { buildChatSystemPrompt } from "../prompts/index.js";
 import { readAiSettings } from "../utils/aiSettings.js";
 
@@ -129,6 +133,74 @@ const loadCatalog = async () => {
   if (products.length === 0) return "The catalogue is currently empty.";
 
   return products.map(describeProduct).join("\n");
+};
+
+// Snapshot of the signed-in customer stored with every turn. Our own record is
+// preferred (no extra network call); Clerk's API is the fallback when the user
+// signed in before the local sync caught up.
+const resolveChatUser = async (clerkId) => {
+  try {
+    const user = await User.findOne({ clerkId }).lean();
+    if (user) {
+      const email = (user.email_addresses || "").toLowerCase();
+      const name =
+        [user.first_name, user.last_name].filter(Boolean).join(" ").trim() ||
+        user.username ||
+        email;
+
+      return {
+        clerkId,
+        name: name.slice(0, 120),
+        email,
+        imageUrl: user.profile_image_url || "",
+      };
+    }
+  } catch (error) {
+    console.error("chat: local user lookup failed:", error.message);
+  }
+
+  try {
+    const user = await clerkClient.users.getUser(clerkId);
+    const email =
+      user.emailAddresses.find(
+        (entry) => entry.id === user.primaryEmailAddressId,
+      )?.emailAddress ||
+      user.emailAddresses[0]?.emailAddress ||
+      "";
+    const name =
+      [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
+      user.username ||
+      email.split("@")[0] ||
+      "";
+
+    return {
+      clerkId,
+      name: name.slice(0, 120),
+      email: email.toLowerCase(),
+      imageUrl: user.imageUrl || "",
+    };
+  } catch (error) {
+    console.error("chat: Clerk user lookup failed:", error.message);
+  }
+
+  return { clerkId, name: "", email: "", imageUrl: "" };
+};
+
+// Persisting the turn must never turn a good reply into an error response.
+// If the write fails the client simply has no chatId to rate.
+const saveChatLog = async ({ clerkId, question, response, provider }) => {
+  try {
+    const user = await resolveChatUser(clerkId);
+    return await ChatLog.create({
+      user,
+      question,
+      response,
+      provider: provider || "",
+    });
+  } catch (error) {
+    console.error("chat: could not save conversation:", error.message);
+    return null;
+  }
 };
 
 // Turn client history into a role-alternating conversation that always ends
@@ -399,10 +471,24 @@ export const chat = async (req, res) => {
 
     console.log(`chat: reply generated via ${provider}`);
 
+    // Store the question/reply pair with the signed-in customer. The returned
+    // chatId is what the storefront uses to attach like/dislike feedback.
+    const chatLog = await saveChatLog({
+      clerkId: req.clerkUserId,
+      question: message.trim(),
+      response: reply,
+      provider,
+    });
+
     return res.status(200).json({
       success: true,
       message: "Chat reply generated",
-      data: { reply },
+      data: {
+        reply,
+        chatId: chatLog?._id?.toString() || null,
+        feedback: chatLog?.feedback || "",
+        createdAt: chatLog?.createdAt || null,
+      },
     });
   } catch (err) {
     // Log the provider error for operators, but never expose internals to the
@@ -411,6 +497,72 @@ export const chat = async (req, res) => {
     return res.status(502).json({
       success: false,
       message: "The assistant is unavailable right now. Please try again in a moment.",
+    });
+  }
+};
+
+// PATCH /api/chat/:chatId/feedback
+// Accepts "like", "dislike", or "" (clear). Ownership is enforced by the
+// Clerk id on the document, never by an id supplied in the body.
+export const updateChatFeedback = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const rawFeedback = req.body?.feedback;
+
+    if (typeof rawFeedback !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: 'Feedback must be "like", "dislike", or empty.',
+      });
+    }
+
+    const feedback = rawFeedback.trim().toLowerCase();
+    if (!["", "like", "dislike"].includes(feedback)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Feedback must be "like", "dislike", or empty.',
+      });
+    }
+
+    if (!mongoose.isValidObjectId(chatId)) {
+      return res.status(404).json({
+        success: false,
+        message: "Chat response not found.",
+      });
+    }
+
+    const updated = await ChatLog.findOneAndUpdate(
+      { _id: chatId, "user.clerkId": req.clerkUserId },
+      {
+        $set: {
+          feedback,
+          feedbackAt: feedback ? new Date() : null,
+        },
+      },
+      { returnDocument: "after" },
+    );
+
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        message: "Chat response not found.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Feedback saved",
+      data: {
+        chatId: updated._id.toString(),
+        feedback: updated.feedback,
+        feedbackAt: updated.feedbackAt,
+      },
+    });
+  } catch (err) {
+    console.error("chat feedback error:", err?.message || err);
+    return res.status(500).json({
+      success: false,
+      message: "Could not save feedback right now.",
     });
   }
 };

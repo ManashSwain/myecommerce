@@ -2,10 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/react";
 import {
   ArrowPathIcon,
+  HandThumbDownIcon as HandThumbDownOutlineIcon,
+  HandThumbUpIcon as HandThumbUpOutlineIcon,
   PaperAirplaneIcon,
   SparklesIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
+import {
+  HandThumbDownIcon as HandThumbDownSolidIcon,
+  HandThumbUpIcon as HandThumbUpSolidIcon,
+} from "@heroicons/react/24/solid";
 import { API_BASE_URL } from "../constants";
 
 const SUGGESTIONS = [
@@ -46,6 +52,60 @@ const TypingDots = () => (
     </div>
   </div>
 );
+
+// Only rendered for replies saved on the server (chatId exists). Clicking the
+// active rating again clears it, matching the API's empty-feedback state.
+const FeedbackButtons = ({ message, onRate }) => {
+  const pending = Boolean(message.feedbackPending);
+  const liked = message.feedback === "like";
+  const disliked = message.feedback === "dislike";
+
+  const buttonBase =
+    "flex items-center justify-center rounded-full p-1 transition disabled:cursor-not-allowed disabled:opacity-50";
+
+  return (
+    <div className="mt-1.5 flex items-center gap-0.5 border-t border-gray-100 pt-1.5">
+      <button
+        type="button"
+        onClick={() => onRate(message.id, message.chatId, "like")}
+        disabled={pending}
+        aria-pressed={liked}
+        aria-label={liked ? "Remove like" : "Like this response"}
+        title={liked ? "Remove like" : "Like this response"}
+        className={`${buttonBase} ${
+          liked
+            ? "text-emerald-600 hover:bg-emerald-50"
+            : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        }`}
+      >
+        {liked ? (
+          <HandThumbUpSolidIcon aria-hidden="true" className="size-3.5" />
+        ) : (
+          <HandThumbUpOutlineIcon aria-hidden="true" className="size-3.5" />
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={() => onRate(message.id, message.chatId, "dislike")}
+        disabled={pending}
+        aria-pressed={disliked}
+        aria-label={disliked ? "Remove dislike" : "Dislike this response"}
+        title={disliked ? "Remove dislike" : "Dislike this response"}
+        className={`${buttonBase} ${
+          disliked
+            ? "text-rose-600 hover:bg-rose-50"
+            : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+        }`}
+      >
+        {disliked ? (
+          <HandThumbDownSolidIcon aria-hidden="true" className="size-3.5" />
+        ) : (
+          <HandThumbDownOutlineIcon aria-hidden="true" className="size-3.5" />
+        )}
+      </button>
+    </div>
+  );
+};
 
 const Aichatbox = () => {
   const { isSignedIn, getToken } = useAuth();
@@ -173,6 +233,14 @@ const Aichatbox = () => {
           role: "assistant",
           text: reply.trim(),
           time: formatTime(),
+          chatId:
+            typeof payload?.data?.chatId === "string"
+              ? payload.data.chatId
+              : null,
+          feedback:
+            typeof payload?.data?.feedback === "string"
+              ? payload.data.feedback
+              : "",
         },
       ]);
     } catch (error) {
@@ -195,6 +263,67 @@ const Aichatbox = () => {
         requestRef.current = null;
         setIsTyping(false);
       }
+    }
+  };
+
+  const rateResponse = async (messageId, chatId, value) => {
+    const message = messages.find((item) => item.id === messageId);
+    if (!message || !chatId || message.feedbackPending) return;
+
+    const previous = message.feedback || "";
+    // Clicking the active rating again clears it.
+    const next = previous === value ? "" : value;
+
+    // Optimistic update so the thumb reacts immediately.
+    setMessages((prev) =>
+      prev.map((item) =>
+        item.id === messageId
+          ? { ...item, feedback: next, feedbackPending: true }
+          : item,
+      ),
+    );
+
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Please sign in to rate responses.");
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/chat/${chatId}/feedback`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ feedback: next }),
+        },
+      );
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.message || "Couldn't save your feedback.");
+      }
+
+      const saved =
+        typeof payload?.data?.feedback === "string"
+          ? payload.data.feedback
+          : next;
+      setMessages((prev) =>
+        prev.map((item) =>
+          item.id === messageId
+            ? { ...item, feedback: saved, feedbackPending: false }
+            : item,
+        ),
+      );
+    } catch {
+      // Roll back to the previous rating if the request did not stick.
+      setMessages((prev) =>
+        prev.map((item) =>
+          item.id === messageId
+            ? { ...item, feedback: previous, feedbackPending: false }
+            : item,
+        ),
+      );
     }
   };
 
@@ -315,6 +444,9 @@ const Aichatbox = () => {
                   >
                     {message.time}
                   </p>
+                  {message.role === "assistant" && message.chatId && (
+                    <FeedbackButtons message={message} onRate={rateResponse} />
+                  )}
                 </div>
               </div>
             ))}
