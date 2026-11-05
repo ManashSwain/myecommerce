@@ -1,4 +1,5 @@
 import { API_BASE_URL } from "../constants";
+import { adminApiFetch } from "./adminApi";
 
 // Fetch a paginated, searchable list of users (admin).
 // params: { search, page, limit, status }  status: "all" | "active" | "blocked"
@@ -48,4 +49,15 @@ export const setUserBlocked = async (userId, isBlocked, reason = "") => {
     throw new Error(json.message || "Could not update user");
   }
   return json.data;
+};
+
+// Pull every Clerk account into MongoDB. Backfills users created before the
+// webhook was configured and repairs any missed user.created/user.updated
+// events. Admin-only, so it carries the Auth0 ID token.
+export const syncUsersFromClerk = async (token) => {
+  const json = await adminApiFetch("/api/sync-users", {
+    token,
+    method: "POST",
+  });
+  return json.data || { created: 0, updated: 0, failed: 0, failures: [] };
 };

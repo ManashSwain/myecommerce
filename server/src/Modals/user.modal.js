@@ -6,25 +6,32 @@ const userSchema = new mongoose.Schema({
         required : true,
         unique : true
     },
+    // Clerk does not require a name (social / phone sign-ups often have none),
+    // so these must stay optional or the webhook insert is rejected.
     first_name : {
         type : String,
-        required : true
+        default : ""
     },
     last_name : {
-        type: String,
-        required : true
+        type : String,
+        default : ""
     },
     profile_image_url : {
         type : String
     },
+    // Optional in Clerk. `sparse` keeps the unique index from treating every
+    // user without a username as a duplicate of the others.
     username : {
         type : String,
-        unique : true
+        unique : true,
+        sparse : true
     },
+    // Optional too (a Clerk user can be phone-only). Sparse for the same
+    // reason as username. Kept unique so one email maps to one account.
     email_addresses : {
         type: String,
         unique: true,
-        required : true
+        sparse : true
     },
     // Admin-controlled suspension. A blocked user's account is disabled in the
     // storefront; the admin Users panel can toggle this on and off.
@@ -64,5 +71,31 @@ const userSchema = new mongoose.Schema({
 },{timestamps:true})
 
 const User = mongoose.models.User || mongoose.model("User", userSchema)
+
+// Existing databases created `username_1` and `email_addresses_1` as
+// non-sparse unique indexes. Now that both fields are optional, the indexes
+// must be sparse or a second user without one of them looks like a duplicate.
+// Mongo never changes an index in place, so drop the legacy one before
+// rebuilding it from the current schema. Safe to run on every boot: once the
+// index is sparse this is a no-op.
+export const ensureUserIndexes = async () => {
+    try {
+        const collection = mongoose.connection.collection("users");
+        const existing = await collection.indexes().catch(() => []);
+
+        for (const name of ["username_1", "email_addresses_1"]) {
+            const index = existing.find((entry) => entry.name === name);
+            if (index && !index.sparse) {
+                await collection.dropIndex(name);
+                console.log(`Dropped legacy non-sparse index ${name}`);
+            }
+        }
+
+        await User.createIndexes();
+    } catch (err) {
+        // Index maintenance must never stop the API from serving traffic.
+        console.error("Could not ensure user indexes:", err.message);
+    }
+};
 
 export default User

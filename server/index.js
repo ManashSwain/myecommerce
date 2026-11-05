@@ -34,6 +34,9 @@ import aiSettingsrouter from "./src/Routes/aiSettings.route.js";
 
 // Stripe webhook controller (needs the RAW body for signature verification)
 import { stripeWebhook } from "./src/Controllers/order.controller.js";
+// Clerk webhook controller (also needs the RAW body)
+import { handleclerkwebhooks } from "./src/Controllers/user.controller.js";
+import { ensureUserIndexes } from "./src/Modals/user.modal.js";
 
 // DNS SETUP
 import dns from "dns";
@@ -114,6 +117,14 @@ app.post(
   stripeWebhook
 );
 
+// Clerk webhook: same rule — it must see the raw body to verify Svix
+// signatures, so it is mounted before express.json() too.
+app.post(
+  "/api/webhooks",
+  express.raw({ type: "application/json" }),
+  handleclerkwebhooks
+);
+
 // Express middlewares — MUST be registered before the routers so JSON request
 // bodies (e.g. the block reason, cart items, orders) are parsed.
 app.use(express.json());
@@ -178,7 +189,7 @@ app.get("/", (req, res) => {
 });
 
 // Database CALL
-connectDb();
+connectDb().then(ensureUserIndexes);
 
 app.listen(PORT, () => {
   console.log(`App is listening on port ${PORT}`);

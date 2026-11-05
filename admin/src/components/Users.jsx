@@ -9,8 +9,14 @@ import {
   ShieldCheckIcon,
   EyeIcon,
   EyeSlashIcon,
+  ArrowPathIcon,
 } from "@heroicons/react/24/outline";
-import { getAllUsers, setUserBlocked } from "../utils/user";
+import {
+  getAllUsers,
+  setUserBlocked,
+  syncUsersFromClerk,
+} from "../utils/user";
+import { useAdminSession } from "../context/adminSession";
 import ConfirmModal from "./ConfirmModal";
 
 const MASKED_CONTACT = "••••••••••••";
@@ -71,6 +77,7 @@ const StatCard = ({ label, value, sub, icon: Icon, tone = "blue" }) => {
 };
 
 const Users = () => {
+  const { token } = useAdminSession();
   const [users, setUsers] = useState([]);
   const [summary, setSummary] = useState({
     totalUsers: 0,
@@ -99,6 +106,7 @@ const Users = () => {
   const [blockTarget, setBlockTarget] = useState(null); // user object
   const [blockReason, setBlockReason] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // Debounce search so we don't hit the API on every keystroke.
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -169,6 +177,32 @@ const Users = () => {
     }
   };
 
+  // Pull missing accounts straight from Clerk. This is the recovery path when
+  // webhook deliveries were missed; normal sign-ups still sync automatically.
+  const handleSync = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const result = await syncUsersFromClerk(token);
+      const { created = 0, updated = 0, failed = 0 } = result;
+      const parts = [];
+      if (created) parts.push(`${created} added`);
+      if (updated) parts.push(`${updated} updated`);
+      if (parts.length === 0) parts.push("everything already up to date");
+      toast.success(`Clerk sync complete — ${parts.join(", ")}`);
+      if (failed) {
+        toast.warn(
+          `${failed} user${failed === 1 ? "" : "s"} could not be synced`,
+        );
+      }
+      await load();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   // Open the block dialog (reset any previous reason).
   const openBlockDialog = (user) => {
     setBlockReason("");
@@ -221,6 +255,18 @@ const Users = () => {
             {summary.totalUsers === 1 ? "" : "s"}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={handleSync}
+          disabled={syncing}
+          className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <ArrowPathIcon
+            aria-hidden="true"
+            className={`size-4 ${syncing ? "animate-spin" : ""}`}
+          />
+          {syncing ? "Syncing…" : "Sync from Clerk"}
+        </button>
       </div>
 
       {/* Stat cards */}

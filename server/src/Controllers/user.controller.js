@@ -1,74 +1,166 @@
+import { clerkClient } from "@clerk/express";
 import { verifyWebhook } from "@clerk/express/webhooks";
-import User from "../Modals/user.modal.js";
+import User, { ensureUserIndexes } from "../Modals/user.modal.js";
 import { Order } from "../Modals/order.modal.js";
 
+const readText = (value) => String(value ?? "").trim();
+
+// Webhook payloads use snake_case; the Clerk Backend SDK uses camelCase.
+// Accept either shape so the webhook, backfill and login self-heal can share
+// one normalizer.
+const normalizeClerkUser = (raw = {}) => {
+  const clerkId = readText(raw.id);
+  if (!clerkId) return null;
+
+  const emailAddresses = raw.email_addresses ?? raw.emailAddresses ?? [];
+  const primaryEmailId =
+    raw.primary_email_address_id ?? raw.primaryEmailAddressId;
+  const primaryEmail =
+    emailAddresses.find((entry) => entry.id === primaryEmailId) ||
+    emailAddresses[0];
+  const email = readText(
+    primaryEmail?.email_address ?? primaryEmail?.emailAddress,
+  ).toLowerCase();
+
+  return {
+    clerkId,
+    first_name: readText(raw.first_name ?? raw.firstName),
+    last_name: readText(raw.last_name ?? raw.lastName),
+    profile_image_url: readText(
+      raw.profile_image_url ?? raw.image_url ?? raw.imageUrl,
+    ),
+    username: readText(raw.username) || undefined,
+    email_addresses: email || undefined,
+  };
+};
+
+// The single write path for every Clerk source (webhooks, backfill, login
+// self-heal). Upserting makes events idempotent: Clerk retries deliveries,
+// and a `user.updated` can arrive for a user whose `user.created` was missed.
+const upsertUserFromClerk = async (raw) => {
+  const normalized = normalizeClerkUser(raw);
+  if (!normalized) throw new Error("Clerk user payload is missing an id");
+
+  const { clerkId, ...fields } = normalized;
+  return User.findOneAndUpdate(
+    { clerkId },
+    { $set: fields },
+    {
+      new: true,
+      upsert: true,
+      runValidators: true,
+      setDefaultsOnInsert: true,
+    },
+  );
+};
+
 export const handleclerkwebhooks = async (req, res) => {
+  let evt;
   try {
-    const evt = await verifyWebhook(req);
+    // Requires the raw request body. The route is mounted before
+    // express.json() in index.js; parsing it first would break the signature.
+    evt = await verifyWebhook(req);
+  } catch (err) {
+    console.error("Clerk webhook verification failed:", err.message);
+    return res
+      .status(400)
+      .json({ success: false, message: "Invalid webhook signature" });
+  }
 
-    const {
-      id,
-      first_name,
-      last_name,
-      profile_image_url,
-      username,
-      email_addresses,
-    } = evt.data;
+  try {
+    const data = evt.data || {};
 
-    const eventType = evt.type;
-    console.log(
-      `Received webhook with ID ${id} and event type of ${eventType}`,
-    );
-    console.log("Webhook payload:", evt.data);
-    // Create user 
-    if (evt.type === "user.created") {
-      // console.log("userId:", evt.data.id);
-      const createdUser = await User.create({
-        clerkId: id,
-        first_name: first_name,
-        last_name: last_name,
-        profile_image_url: profile_image_url,
-        username: username,
-        email_addresses: email_addresses[0].email_address,
-      });
+    if (evt.type === "user.created" || evt.type === "user.updated") {
+      const user = await upsertUserFromClerk(data);
       return res.status(200).json({
         success: true,
-        message: "Created user successfully",
-        data: createdUser,
+        message:
+          evt.type === "user.created"
+            ? "Created user successfully"
+            : "Updated user successfully",
+        data: { clerkId: user.clerkId },
       });
     }
-    // update user 
-    if (evt.type === "user.updated") {
-      const user = {
-        clerkId: id,
-        first_name: first_name,
-        last_name: last_name,
-        profile_image_url: profile_image_url,
-        username: username,
-        email_addresses: email_addresses[0].email_address,
-      };
-      const updatedUser = await User.findOneAndUpdate({ clerkId: id }, user, {
-        new: true,
-        runValidators: true,
-      });
-      return res.status(200).json({
-        sucess: true,
-        message: "Updated successfully",
-        data: updatedUser,
-      });
-    }
-    // delete user 
+
     if (evt.type === "user.deleted") {
-      const deletedUser = await User.findOneAndDelete({ clerkId: id });
+      if (data.id) {
+        await User.findOneAndDelete({ clerkId: data.id });
+      }
       return res.status(200).json({
-        sucess: true,
+        success: true,
         message: "Deleted successfully",
-        data: deletedUser,
       });
     }
+
+    // Acknowledge subscriptions we don't use so Clerk stops retrying them.
+    return res.status(200).json({
+      success: true,
+      message: `Ignored ${evt.type}`,
+    });
   } catch (err) {
-    console.error("Error verifying webhook:", err);
-    return res.status(400).send("Error verifying webhook");
+    // Non-2xx makes Clerk retry the delivery later.
+    console.error(`Clerk webhook ${evt?.type} failed:`, err);
+    return res.status(500).json({
+      success: false,
+      message: "Could not sync user",
+    });
+  }
+};
+
+// POST /api/sync-users — admin.
+// Pulls every account from Clerk into MongoDB. This backfills users created
+// before the webhook existed (or while it was failing) and repairs any drift.
+export const syncUsersFromClerk = async (req, res) => {
+  try {
+    await ensureUserIndexes();
+
+    const pageSize = 100;
+    let offset = 0;
+    let created = 0;
+    let updated = 0;
+    let failed = 0;
+    const failures = [];
+
+    for (;;) {
+      const result = await clerkClient.users.getUserList({
+        limit: pageSize,
+        offset,
+      });
+      const batch = Array.isArray(result) ? result : result?.data || [];
+      if (batch.length === 0) break;
+
+      for (const clerkUser of batch) {
+        try {
+          const existed = await User.exists({ clerkId: clerkUser.id });
+          await upsertUserFromClerk(clerkUser);
+          if (existed) updated += 1;
+          else created += 1;
+        } catch (err) {
+          failed += 1;
+          failures.push({ clerkId: clerkUser.id, message: err.message });
+          console.error(
+            `Could not sync Clerk user ${clerkUser.id}:`,
+            err.message,
+          );
+        }
+      }
+
+      if (batch.length < pageSize) break;
+      offset += batch.length;
+    }
+
+    const synced = created + updated;
+    return res.status(200).json({
+      success: true,
+      message: `Synced ${synced} user${synced === 1 ? "" : "s"} from Clerk`,
+      data: { created, updated, failed, failures },
+    });
+  } catch (err) {
+    console.error("syncUsersFromClerk error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Could not sync users from Clerk.",
+    });
   }
 };
 
@@ -163,7 +255,7 @@ export const getAllUsers = async (req, res) => {
         fullName:
           [u.first_name, u.last_name].filter(Boolean).join(" ") || "—",
         username: u.username || "",
-        email: u.email_addresses,
+        email: u.email_addresses || "",
         image: u.profile_image_url || "",
         isBlocked: !!u.isBlocked,
         blockReason: u.blockReason || "",
@@ -286,13 +378,29 @@ export const trackLogin = async (req, res) => {
         .json({ success: false, message: "userId is required" });
     }
 
-    const user = await User.findOneAndUpdate(
-      { clerkId: userId },
-      { $set: { lastLoginAt: new Date(), hasLoggedIn: true } },
-      { new: true }
-    );
+    const stampLogin = () =>
+      User.findOneAndUpdate(
+        { clerkId: userId },
+        { $set: { lastLoginAt: new Date(), hasLoggedIn: true } },
+        { new: true },
+      );
 
-    // Not registered yet (webhook lag) — the storefront keeps working.
+    let user = await stampLogin();
+
+    // Webhook may have been missed (or configured after the account was
+    // created). Pull the account from Clerk and store it on first login so
+    // the admin panel self-heals without needing a manual sync.
+    if (!user) {
+      try {
+        const clerkUser = await clerkClient.users.getUser(userId);
+        await upsertUserFromClerk(clerkUser);
+        user = await stampLogin();
+      } catch (err) {
+        console.error("trackLogin self-heal failed:", err.message);
+      }
+    }
+
+    // Not registered yet — the storefront keeps working.
     if (!user) {
       return res.status(200).json({
         success: true,
