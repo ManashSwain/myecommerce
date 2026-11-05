@@ -8,6 +8,7 @@ import { CheckCircleIcon, TrashIcon } from "@heroicons/react/20/solid";
 import {
   BanknotesIcon,
   CreditCardIcon,
+  ExclamationTriangleIcon,
   MapPinIcon,
   PlusIcon,
 } from "@heroicons/react/24/outline";
@@ -73,6 +74,256 @@ const TAX_RATE = 0.0863;
 const chipLabel = (type) =>
   type === "home" ? "Home" : type === "work" ? "Work" : "Other";
 
+// The store charges in rupees (Stripe is configured with "inr"), so keep
+// every checkout total consistent with the rest of the storefront.
+const money = (value) =>
+  `₹${Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+
+const primaryButton =
+  "inline-flex items-center justify-center rounded-md bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-xs transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2";
+
+const secondaryButton =
+  "inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-5 py-2.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2";
+
+// Shown while the server verifies the Stripe session and creates the order.
+// It replaces the checkout form so the shopper never sees it again after a
+// successful payment.
+const PaymentVerifying = () => (
+  <div className="bg-gray-50">
+    <div className="mx-auto flex min-h-[60vh] max-w-3xl flex-col items-center justify-center px-4 py-24 text-center sm:px-6 lg:px-8">
+      <div
+        className="size-12 animate-spin rounded-full border-4 border-gray-200 border-t-indigo-600"
+        aria-hidden="true"
+      />
+      <h1 className="mt-6 text-xl font-semibold text-gray-900">
+        Confirming your payment…
+      </h1>
+      <p className="mt-2 max-w-sm text-sm text-gray-600">
+        Please keep this page open while we finish placing your order.
+      </p>
+    </div>
+  </div>
+);
+
+// Dedicated payment-success page. Uses the order returned by the server (not
+// the cart, which may already be cleared) so the receipt stays complete even
+// after a full-page redirect back from Stripe.
+const PaymentSuccess = ({
+  order,
+  onViewOrders,
+  onContinueShopping,
+  onContactSupport,
+}) => {
+  const items = order?.items || [];
+
+  return (
+    <div className="bg-gray-50">
+      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="px-6 py-10 text-center sm:px-10">
+            <span className="mx-auto flex size-16 items-center justify-center rounded-full bg-green-100 text-green-600 ring-8 ring-green-50">
+              <CheckCircleIcon className="size-9" aria-hidden="true" />
+            </span>
+            <h1 className="mt-6 text-2xl font-bold tracking-tight text-gray-900 sm:text-3xl">
+              Payment successful
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-gray-600">
+              Thank you! Your order has been placed and a confirmation email is
+              on its way to{" "}
+              <span className="font-medium text-gray-900">
+                {order?.contactEmail}
+              </span>
+              .
+            </p>
+            {order?.orderNumber && (
+              <p className="mt-4 inline-flex rounded-full bg-gray-100 px-4 py-1.5 text-sm font-semibold tracking-wide text-gray-800">
+                Order {order.orderNumber}
+              </p>
+            )}
+          </div>
+
+          <dl className="grid grid-cols-1 gap-px border-t border-gray-200 bg-gray-200 sm:grid-cols-3">
+            <div className="bg-white px-6 py-4 text-center">
+              <dt className="text-xs font-medium tracking-wide text-gray-500 uppercase">
+                Amount paid
+              </dt>
+              <dd className="mt-1 text-lg font-semibold text-gray-900">
+                {money(order?.total)}
+              </dd>
+            </div>
+            <div className="bg-white px-6 py-4 text-center">
+              <dt className="text-xs font-medium tracking-wide text-gray-500 uppercase">
+                Payment method
+              </dt>
+              <dd className="mt-1 text-lg font-semibold text-gray-900">
+                {order?.paymentMethod === "cod" ? "Cash on delivery" : "Card"}
+              </dd>
+            </div>
+            <div className="bg-white px-6 py-4 text-center">
+              <dt className="text-xs font-medium tracking-wide text-gray-500 uppercase">
+                Payment status
+              </dt>
+              <dd className="mt-1 text-lg font-semibold text-green-700 capitalize">
+                {order?.paymentStatus || "paid"}
+              </dd>
+            </div>
+          </dl>
+
+          <div className="border-t border-gray-200 px-6 py-6 sm:px-10">
+            <h2 className="text-sm font-semibold text-gray-900">
+              Items in this order
+            </h2>
+            <ul role="list" className="mt-3 divide-y divide-gray-100">
+              {items.map((item, index) => (
+                <li
+                  key={`${item.title}-${index}`}
+                  className="flex items-center gap-4 py-3"
+                >
+                  {item.image ? (
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      className="size-16 shrink-0 rounded-md border border-gray-200 object-cover"
+                    />
+                  ) : (
+                    <div
+                      className="size-16 shrink-0 rounded-md border border-dashed border-gray-200 bg-gray-50"
+                      aria-hidden="true"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-900">
+                      {item.title}
+                    </p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {[item.color, item.size].filter(Boolean).join(" · ")}
+                      {item.quantity > 1 ? ` · Qty ${item.quantity}` : ""}
+                    </p>
+                  </div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {money(item.price * item.quantity)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div className="border-t border-gray-200 px-6 py-6 sm:px-10">
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Subtotal</dt>
+                <dd className="font-medium text-gray-900">
+                  {money(order?.subtotal)}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Shipping</dt>
+                <dd className="font-medium text-gray-900">
+                  {money(order?.shipping)}
+                </dd>
+              </div>
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Taxes</dt>
+                <dd className="font-medium text-gray-900">
+                  {money(order?.taxes)}
+                </dd>
+              </div>
+              <div className="flex justify-between border-t border-gray-200 pt-2 text-base">
+                <dt className="font-semibold text-gray-900">Total paid</dt>
+                <dd className="font-semibold text-gray-900">
+                  {money(order?.total)}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="flex flex-col gap-3 border-t border-gray-200 px-6 py-6 sm:flex-row sm:justify-center sm:px-10">
+            <button type="button" onClick={onViewOrders} className={primaryButton}>
+              View my orders
+            </button>
+            <button
+              type="button"
+              onClick={onContinueShopping}
+              className={secondaryButton}
+            >
+              Continue shopping
+            </button>
+          </div>
+        </div>
+
+        <p className="mt-6 text-center text-xs text-gray-500">
+          Need help with this order?{" "}
+          <button
+            type="button"
+            onClick={onContactSupport}
+            className="font-medium text-indigo-600 hover:text-indigo-500"
+          >
+            Contact support
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+};
+
+// Shown when the return trip from Stripe cannot be verified. Never falls back
+// to the checkout form — the shopper may already have been charged.
+const PaymentError = ({
+  message,
+  sessionId,
+  onRetry,
+  onViewOrders,
+  onContactSupport,
+}) => (
+  <div className="bg-gray-50">
+    <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6 lg:px-8">
+      <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm sm:p-10">
+        <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-amber-100 text-amber-600 ring-8 ring-amber-50">
+          <ExclamationTriangleIcon className="size-7" aria-hidden="true" />
+        </span>
+        <h1 className="mt-6 text-2xl font-bold text-gray-900">
+          We couldn&apos;t confirm your order
+        </h1>
+        <p className="mt-3 text-sm leading-6 text-gray-600">{message}</p>
+        <p className="mt-2 text-xs leading-5 text-gray-500">
+          If your payment went through, your card was charged safely — contact
+          support with the reference below and we&apos;ll help you finish the
+          order.
+        </p>
+        {sessionId && (
+          <p className="mt-4 rounded-md bg-gray-50 px-3 py-2 font-mono text-xs break-all text-gray-600">
+            Payment reference: {sessionId}
+          </p>
+        )}
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+          {onRetry && (
+            <button type="button" onClick={onRetry} className={primaryButton}>
+              Try again
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onViewOrders}
+            className={onRetry ? secondaryButton : primaryButton}
+          >
+            View my orders
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onContactSupport}
+          className="mt-4 text-sm font-medium text-indigo-600 hover:text-indigo-500"
+        >
+          Contact support
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 const Checkout = () => {
   const { isSignedIn, isLoaded, user } = useAuth();
   const navigate = useNavigate();
@@ -88,9 +339,26 @@ const Checkout = () => {
   const [loading, setLoading] = useState(true);
   const [placingOrder, setPlacingOrder] = useState(false);
 
-  // Result banner shown after returning from Stripe's hosted checkout.
+  // Result of returning from Stripe's hosted checkout.
   // status: "idle" | "verifying" | "success" | "canceled" | "error"
-  const [paymentResult, setPaymentResult] = useState({ status: "idle", message: "" });
+  // Start in "verifying" when the URL says a payment succeeded, so the
+  // checkout form never flashes before the server confirms the order.
+  const [paymentResult, setPaymentResult] = useState(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("success")) {
+      return { status: "verifying", message: "Confirming your payment…" };
+    }
+    if (params.get("canceled")) {
+      return {
+        status: "canceled",
+        message:
+          "Payment canceled — you can continue shopping and check out when you're ready.",
+      };
+    }
+    return { status: "idle", message: "" };
+  });
+  // Bumping this re-runs the confirmation request ("Try again").
+  const [verifyAttempt, setVerifyAttempt] = useState(0);
 
   const [deliveryMethodId, setDeliveryMethodId] = useState(
     deliveryMethods[0].id,
@@ -169,8 +437,8 @@ const Checkout = () => {
   }, [isSignedIn, isLoaded, user?.id]);
 
   // Handle the redirect back from Stripe's hosted checkout.
-  //  • ?success=true&session_id=... → verify payment server-side, then create
-  //    the order and send the shopper to their orders page.
+  //  • ?success=true&session_id=... → verify payment server-side, create the
+  //    order, and replace the checkout form with the success page.
   //  • ?canceled=true              → let them know nothing was charged.
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -205,10 +473,10 @@ const Checkout = () => {
           setPaymentResult({
             status: "success",
             message: `Order placed! Your order number is ${order.orderNumber}. A confirmation email is on its way.`,
+            order,
           });
           // Cart-based orders clear the cart server-side.
           window.dispatchEvent(new Event("cart-updated"));
-          toast.success("Payment successful — order placed!");
         } catch (err) {
           if (!active) return;
           setPaymentResult({
@@ -222,7 +490,7 @@ const Checkout = () => {
         active = false;
       };
     }
-  }, [location.search]);
+  }, [location.search, verifyAttempt]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -283,14 +551,6 @@ const Checkout = () => {
   const shipping = orderItems.length ? selectedDelivery.price : 0;
   const taxes = subtotal * TAX_RATE;
   const total = subtotal + shipping + taxes;
-
-  // The store charges in rupees (Stripe is configured with "inr"), so keep
-  // the checkout totals consistent with the rest of the storefront.
-  const money = (value) =>
-    `₹${Number(value || 0).toLocaleString("en-IN", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email);
 
@@ -387,6 +647,49 @@ const Checkout = () => {
     }
   };
 
+  // Payment return states render before the auth/loading guards. The shopper
+  // has already paid and been redirected, so Clerk still resolving must not
+  // hide the receipt or flash the checkout form.
+  if (paymentResult.status === "verifying") {
+    return <PaymentVerifying />;
+  }
+
+  if (paymentResult.status === "success") {
+    return (
+      <PaymentSuccess
+        order={paymentResult.order}
+        onViewOrders={() => navigate("/orders")}
+        onContinueShopping={() => navigate("/shop")}
+        onContactSupport={() => navigate("/contact")}
+      />
+    );
+  }
+
+  if (paymentResult.status === "error") {
+    const returnSessionId = new URLSearchParams(location.search).get(
+      "session_id",
+    );
+    return (
+      <PaymentError
+        message={paymentResult.message}
+        sessionId={returnSessionId}
+        onRetry={
+          returnSessionId
+            ? () => {
+                setPaymentResult({
+                  status: "verifying",
+                  message: "Confirming your payment…",
+                });
+                setVerifyAttempt((attempt) => attempt + 1);
+              }
+            : null
+        }
+        onViewOrders={() => navigate("/orders")}
+        onContactSupport={() => navigate("/contact")}
+      />
+    );
+  }
+
   if (!isLoaded) return null;
 
   if (!isSignedIn) {
@@ -407,25 +710,11 @@ const Checkout = () => {
       <div className="mx-auto max-w-2xl px-4 pt-16 pb-24 sm:px-6 lg:max-w-7xl lg:px-8">
         <h2 className="sr-only">Checkout</h2>
 
-        {/* Payment result banner (return from Stripe) */}
-        {paymentResult.status !== "idle" && (
-          <div
-            className={`mb-8 rounded-lg border px-4 py-3 text-sm ${
-              paymentResult.status === "success"
-                ? "border-green-200 bg-green-50 text-green-800"
-                : paymentResult.status === "canceled"
-                  ? "border-amber-200 bg-amber-50 text-amber-800"
-                  : paymentResult.status === "verifying"
-                    ? "border-gray-200 bg-white text-gray-600"
-                    : "border-red-200 bg-red-50 text-red-800"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {paymentResult.status === "verifying" && (
-                <span className="size-2 animate-pulse rounded-full bg-gray-400" />
-              )}
-              <p>{paymentResult.message}</p>
-            </div>
+        {/* The success, verifying, and error returns render full pages above,
+            so only a canceled payment still lands on the form. */}
+        {paymentResult.status === "canceled" && (
+          <div className="mb-8 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <p>{paymentResult.message}</p>
           </div>
         )}
 
