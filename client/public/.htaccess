@@ -1,0 +1,11 @@
+# SPA fallback for Hostinger (LiteSpeed/Apache).
+# Client-side routes such as /checkout, /products and /cart must serve
+# index.html on refresh or when Stripe redirects back after payment.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
