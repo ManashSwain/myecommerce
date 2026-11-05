@@ -20,6 +20,7 @@ import Dashboard from "./components/Dashboard";
 import Toast from "./components/Toast";
 import LoggedOut from "./components/LoggedOut";
 import AccessDenied from "./components/AccessDenied";
+import NotFound from "./components/NotFound";
 import { useAuth0 } from "@auth0/auth0-react";
 import { AdminSessionProvider } from "./context/AdminSessionProvider";
 import { getMyAdmin } from "./utils/admins";
@@ -41,6 +42,9 @@ const router = createBrowserRouter([
       { path: "email", element: <Email/> },
       { path: "ai-assistant", element: <AiAssistant/> },
       { path: "reviews", element: <Reviews/> },
+      // Catch-all: unknown paths (including nested ones) render the admin 404
+      // page inside the dashboard layout instead of React Router's default.
+      { path: "*", element: <NotFound /> },
     ],
   },
 ]);

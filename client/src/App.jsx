@@ -17,6 +17,7 @@ import Savedaddressespage from "./pages/Savedaddressespage";
 import Toast from "./components/Toast";
 import Shoppage from "./pages/Shoppage";
 import Featuredproducts from "./pages/Featuredproducts";
+import Notfound from "./components/Notfound";
 
 function App() {
   return (
@@ -41,6 +42,9 @@ function App() {
           <Route path="policy" element={<Privacypolicy/>}/>
           <Route path="licensing" element={<Licensing/>}/>
           <Route path="contact" element={<Contact/>}/>
+          {/* Catch-all: unknown paths get the storefront 404 page instead of
+              React Router's default or a host-level error page. */}
+          <Route path="*" element={<Notfound/>}/>
         </Route>
       </Routes>
       <Toast />
