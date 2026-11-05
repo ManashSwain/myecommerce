@@ -1,6 +1,6 @@
-// Load .env before importing any module that reads configuration at import
-// time (Clerk middleware, Stripe, Cloudinary, ...).
-import "dotenv/config";
+// Load .env / .env.local before importing any module that reads configuration
+// at import time (Clerk middleware, Stripe, Cloudinary, ...). Must stay first.
+import "./src/utils/loadEnv.js";
 import express from "express";
 import cors from "cors";
 import { clerkMiddleware } from "@clerk/express";
@@ -190,6 +190,15 @@ app.get("/", (req, res) => {
 
 // Database CALL
 connectDb().then(ensureUserIndexes);
+
+if (
+  process.env.NODE_ENV === "development" &&
+  String(process.env.DEV_ADMIN_BYPASS || "").toLowerCase() === "true"
+) {
+  console.warn(
+    "Admin auth bypass is ENABLED (development only) — Auth0 is not required.",
+  );
+}
 
 app.listen(PORT, () => {
   console.log(`App is listening on port ${PORT}`);

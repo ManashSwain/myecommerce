@@ -24,6 +24,7 @@ import NotFound from "./components/NotFound";
 import { useAuth0 } from "@auth0/auth0-react";
 import { AdminSessionProvider } from "./context/AdminSessionProvider";
 import { getMyAdmin } from "./utils/admins";
+import { DEV_AUTH_BYPASS, devAdminSession } from "./devAuth";
 
 const router = createBrowserRouter([
   { path: "/logged-out", element: <LoggedOut /> },
@@ -91,13 +92,24 @@ function App() {
 
   // Session state is only "allowed" after the API confirms the Auth0 identity
   // is on the admin allow-list. The router is never mounted otherwise.
-  const [session, setSession] = React.useState({
-    status: "idle", // idle | checking | allowed | denied | error
-    admin: null,
-    token: "",
-    message: "",
-    code: "",
-  });
+  // In local dev, VITE_DEV_AUTH_BYPASS skips Auth0 entirely (see devAuth.js).
+  const [session, setSession] = React.useState(() =>
+    DEV_AUTH_BYPASS
+      ? {
+          status: "allowed",
+          admin: devAdminSession,
+          token: "",
+          message: "",
+          code: "",
+        }
+      : {
+          status: "idle", // idle | checking | allowed | denied | error
+          admin: null,
+          token: "",
+          message: "",
+          code: "",
+        },
+  );
   // Bumping this re-runs the access check ("Check again").
   const [attempt, setAttempt] = React.useState(0);
 
@@ -124,6 +136,7 @@ function App() {
   }, []);
 
   React.useEffect(() => {
+    if (DEV_AUTH_BYPASS) return;
     if (!isLoading && !isAuthenticated && !error && !isLoggedOutRoute) {
       login({
         appState: { returnTo: window.location.pathname },
@@ -135,6 +148,7 @@ function App() {
   }, [isLoading, isAuthenticated, error, login, isLoggedOutRoute]);
 
   React.useEffect(() => {
+    if (DEV_AUTH_BYPASS) return undefined;
     if (isLoading || !isAuthenticated || error || isLoggedOutRoute) {
       return undefined;
     }

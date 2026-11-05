@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Admin from "../Modals/admin.modal.js";
 import { verifyAuth0IdToken } from "../utils/auth0.js";
 
@@ -33,7 +34,40 @@ const requiresVerifiedEmail = () =>
 const fail = (res, status, code, message) =>
   res.status(status).json({ success: false, code, message });
 
+// Local-development auth bypass. It requires BOTH an explicit opt-in in
+// `.env.local` and NODE_ENV=development (set by `npm run dev`). `npm start`
+// never sets development mode, so a deployed server keeps Auth0 enforced even
+// if the env file is accidentally uploaded.
+const devAdminBypassEnabled = () =>
+  process.env.NODE_ENV === "development" &&
+  String(process.env.DEV_ADMIN_BYPASS || "").toLowerCase() === "true";
+
+// A valid ObjectId so controllers that store req.admin._id (ticket replies)
+// can cast it. It intentionally matches no Admin document.
+const DEV_ADMIN_ID = new mongoose.Types.ObjectId("000000000000000000000001");
+
 export const requireAdmin = async (req, res, next) => {
+  if (devAdminBypassEnabled()) {
+    req.admin = {
+      _id: DEV_ADMIN_ID,
+      auth0Id: "dev|local-admin",
+      email: "dev-admin@localhost",
+      name: "Dev Admin",
+      picture: "",
+      role: "owner",
+      isActive: true,
+      createdBy: "dev",
+      lastLoginAt: new Date(),
+      createdAt: new Date(),
+    };
+    req.auth0 = {
+      sub: "dev|local-admin",
+      email: "dev-admin@localhost",
+      email_verified: true,
+    };
+    return next();
+  }
+
   try {
     const [scheme, token] = String(req.headers.authorization || "").split(" ");
     if (scheme !== "Bearer" || !token) {
